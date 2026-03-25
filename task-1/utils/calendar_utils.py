@@ -1,7 +1,6 @@
 import pandas as pd
 from datetime import datetime
 
-
 def get_active_service_ids(calendar: pd.DataFrame, calendar_dates: pd.DataFrame, date_str: str) -> set[str]:
     days_map = {0: "monday", 1: "tuesday", 2: "wednesday", 3: "thursday", 4: "friday", 5: "saturday", 6: "sunday"}
     date_obj = datetime.strptime(date_str, "%Y%m%d")

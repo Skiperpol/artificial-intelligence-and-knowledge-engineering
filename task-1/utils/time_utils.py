@@ -1,7 +1,6 @@
 import pandas as pd
 from typing import Any
 
-
 def time_to_seconds(time: Any) -> int | None:
     if pd.isna(time) or str(time).lower() in ("nan", ""):
         return None
@@ -13,7 +12,6 @@ def time_to_seconds(time: Any) -> int | None:
         return None
 
 def secs_to_time(secs):
-    """Konwertuje sekundy na format HH:MM:SS[cite: 165]."""
     h = int(secs // 3600)
     m = int((secs % 3600) // 60)
     s = int(secs % 60)
