@@ -11,11 +11,3 @@ def gtfs_time_to_seconds(time: Any) -> int | None:
         return hours * 3600 + minutes * 60 + seconds
     except ValueError:
         return None
-
-
-def add_time_in_seconds(stop_times: pd.DataFrame) -> pd.DataFrame:
-    stop_times = stop_times.copy()
-    stop_times["arrival_secs"] = stop_times["arrival_time"].apply(gtfs_time_to_seconds)
-    stop_times["departure_secs"] = stop_times["departure_time"].apply(gtfs_time_to_seconds)
-    return stop_times
-
