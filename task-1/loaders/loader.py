@@ -2,7 +2,7 @@ import pandas as pd
 from pathlib import Path
 
 from loaders.dtypes import GTFS_DTYPES
-from utils.time_utils import gtfs_time_to_seconds
+from utils.time_utils import time_to_seconds
 
 def _load_one_file(path: Path, name: str) -> pd.DataFrame:
     file_path = path / f"{name}.txt"
@@ -17,10 +17,10 @@ def _add_stop_times_seconds(stop_times: pd.DataFrame) -> pd.DataFrame:
 
     stop_times = stop_times.copy()
     stop_times["arrival_secs"] = (
-        stop_times["arrival_time"].apply(gtfs_time_to_seconds).astype("Int64")
+        stop_times["arrival_time"].apply(time_to_seconds).astype("Int64")
     )
     stop_times["departure_secs"] = (
-        stop_times["departure_time"].apply(gtfs_time_to_seconds).astype("Int64")
+        stop_times["departure_time"].apply(time_to_seconds).astype("Int64")
     )
     return stop_times
 

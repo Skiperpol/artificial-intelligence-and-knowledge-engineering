@@ -1,15 +1,9 @@
 from pathlib import Path
 from utils.calendar_utils import get_active_service_ids
 from utils.coords_utils import build_coords_dict
-from graph.graph import build_graph, filter_graph_by_services, get_stop_groups, add_transfer_logic
-from loaders.loader import load_gtfs
-
-from pathlib import Path
-from datetime import datetime, timedelta
-from utils.calendar_utils import get_active_service_ids
-from utils.coords_utils import build_coords_dict
 from graph.graph import build_graph, get_stop_groups, add_transfer_logic
 from loaders.loader import load_gtfs
+from datetime import datetime, timedelta
 
 def prepare_data_for_astar(gtfs_folder: str | Path, date_str: str):
     gtfs_data = load_gtfs(gtfs_folder)
