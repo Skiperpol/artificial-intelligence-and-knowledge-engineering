@@ -27,6 +27,7 @@ def _add_stop_times_seconds(stop_times: pd.DataFrame) -> pd.DataFrame:
 
 def load_gtfs(folder: str | Path) -> dict[str, pd.DataFrame]:
     path = Path(folder)
+    data = {}
     for name in GTFS_DTYPES:
         data[name] = _load_one_file(path, name)
     data["stop_times"] = _add_stop_times_seconds(data["stop_times"])

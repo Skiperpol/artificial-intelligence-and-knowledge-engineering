@@ -12,6 +12,7 @@ GTFS_DTYPES: dict[str, dict[str, str]] = {
         "departure_time": "string",
         "stop_id": "string",
         "stop_sequence": "int32",
+        "pickup_type": "int8",
     },
     "trips": {
         "trip_id": "string",
