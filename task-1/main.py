@@ -12,7 +12,7 @@ from utils.time_utils import secs_to_time, time_to_seconds
 DEFAULT_GTFS_FOLDER = "google_transit/"
 DEFAULT_DATE_STR = "20260303"
 ALLOWED_CRITERIA = {"t", "p"}
-ALLOWED_ALGOS = {"astar", "dijkstra", "weighted_astar"}
+ALLOWED_ALGOS = {"astar", "dijkstra", "weighted_astar", "tabu_unbounded"}
 
 
 def parse_cli_args(argv: list[str]) -> dict | None:
@@ -85,25 +85,51 @@ def build_graph_and_stops(gtfs_folder: str, date_str: str):
 
 
 def print_route(path, stops_df) -> None:
-    print(f"{'Z przystanku':<30} | {'Linia':<10} | {'Odjazd':<10} | {'Przyjazd':<10}")
+    print(
+        f"{'Z przystanku':<30} | {'Do przystanku':<30} | {'Linia':<10} | {'Odjazd':<10} | {'Przyjazd':<10}"
+    )
     print("-" * 75)
 
     id_to_name = stops_df.set_index("stop_id")["stop_name"].to_dict()
     for step in path:
         name = id_to_name.get(step["from_stop"], step["from_stop"])
+        to_name = id_to_name.get(step["to_stop"], step["to_stop"])
         print(
-            f"{name:<30} | {step['line']:<10} | {secs_to_time(step['dep']):<10} | {secs_to_time(step['arr']):<10}"
+            f"{name:<30} | {to_name:<30} | {step['line']:<10} | {secs_to_time(step['dep']):<10} | {secs_to_time(step['arr']):<10}"
         )
 
 
-def run_tsp(start_id: str, stop_ids: list[str], start_secs: int, final_graph, coords, criterion: str):
+def run_tsp(
+    start_id: str,
+    stop_ids: list[str],
+    start_secs: int,
+    final_graph,
+    coords,
+    criterion: str,
+    algo_type: str,
+):
     if not stop_ids:
         return None, float("inf"), 0.0
 
     print("Uruchamiam Tabu Search...", file=sys.stderr)
     start_calc = time.time()
+
+    if algo_type == "tabu_unbounded":
+        tabu_mode = "unbounded"
+        sp_algo = weighted_astar
+    else:
+        tabu_mode = "bounded"
+        sp_algo = {"astar": a_star, "dijkstra": dijkstra, "weighted_astar": weighted_astar}[algo_type]
+
     path, total_cost = run_tabu_search(
-        start_id, stop_ids, start_secs, final_graph, coords, criterion, weighted_astar
+        start_id,
+        stop_ids,
+        start_secs,
+        final_graph,
+        coords,
+        criterion,
+        sp_algo,
+        tabu_size_mode=tabu_mode,
     )
     calc_duration = time.time() - start_calc
     return path, total_cost, calc_duration
@@ -146,7 +172,11 @@ def print_metrics_single(
     print(f"Algorytm: {algo_type}", file=sys.stderr)
     print(f"Odwiedzone stany (wierzchołki): {visited_nodes}", file=sys.stderr)
     print(f"Czas obliczeń: {calc_duration:.4f}s", file=sys.stderr)
-    print(f"Wartość kryterium: {total_cost - start_secs} (jednostki kosztu)", file=sys.stderr)
+    if criterion == "t":
+        criterion_value = total_cost - start_secs
+    else:
+        criterion_value = total_cost
+    print(f"Wartość kryterium: {criterion_value} (jednostki kosztu)", file=sys.stderr)
 
 
 def print_metrics_tsp(calc_duration: float, total_cost, criterion: str) -> None:
@@ -187,7 +217,7 @@ def main(argv: list[str] | None = None) -> None:
             return
 
         path, total_cost, calc_duration = run_tsp(
-            ids_a[0], ids_l, start_secs, final_graph, coords, criterion
+            ids_a[0], ids_l, start_secs, final_graph, coords, criterion, algo_type
         )
         if not path:
             print("Nie znaleziono poprawnej trasy TSP (pętli).", file=sys.stderr)
@@ -200,6 +230,10 @@ def main(argv: list[str] | None = None) -> None:
     ids_b = get_stop_ids_by_name(stop_b_name, stops_df)
     if not ids_b:
         print(f"Nie znaleziono przystanku: {stop_b_name}", file=sys.stderr)
+        return
+
+    if algo_type == "tabu_unbounded":
+        print("Błąd: 'tabu_unbounded' dotyczy tylko TSP (zadanie 2).", file=sys.stderr)
         return
 
     path, total_cost, visited_nodes, calc_duration = run_single_search(

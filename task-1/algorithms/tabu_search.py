@@ -18,13 +18,37 @@ def get_route_full_details(permutation, start_id, start_secs, graph, coords, cri
         total_path.extend(segment_path)
         current_time = segment_path[-1]['arr']
         
-    final_cost = current_time - start_secs if criterion == 't' else len(total_path)
+    if criterion == 't':
+        final_cost = current_time - start_secs
+    else:
+        transfers = 0
+        current_trip = None
+        for step in total_path:
+            to_trip = step.get('to_trip')
+            if to_trip is None:
+                continue
+            if current_trip is not None and to_trip != current_trip:
+                transfers += 1
+            current_trip = to_trip
+        final_cost = transfers
     return total_path, final_cost
 
 
-def run_tabu_search(start_id, stop_ids, start_secs, graph, coords, criterion, algo_func):
-    tabu_size = len(stop_ids) * 2
-    tabu_list = deque(maxlen=tabu_size)
+def run_tabu_search(
+    start_id,
+    stop_ids,
+    start_secs,
+    graph,
+    coords,
+    criterion,
+    algo_func,
+    tabu_size_mode: str = "bounded",
+):
+    if tabu_size_mode == "unbounded":
+        tabu_list = deque()
+    else:
+        tabu_size = len(stop_ids) * 2
+        tabu_list = deque(maxlen=tabu_size)
     
     current_sol = list(stop_ids)
     random.shuffle(current_sol)
@@ -57,6 +81,7 @@ def run_tabu_search(start_id, stop_ids, start_secs, graph, coords, criterion, al
         if best_neighbor:
             current_sol = list(best_neighbor)
             tabu_list.append(best_neighbor)
+
             if min_neighbor_cost < best_cost:
                 best_cost = min_neighbor_cost
                 best_sol = list(current_sol)

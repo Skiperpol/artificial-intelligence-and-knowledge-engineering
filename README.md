@@ -57,18 +57,13 @@ Kluczowe jest to, jak liczony jest koszt w `task-1/algorithms/utils.py`:
 
 - Dla krawędzi travel koszt rośnie o `(arr_time - real_time)` (czyli „od aktualnego czasu do przyjazdu”: zawiera także czas oczekiwania do odjazdu).
 - Dla krawędzi transfer koszt jest zwiększany o `duration` (w implementacji `duration=0`).
-- Dodatkowo doliczana jest kara za zmianę `trip_id` względem poprzednio użytego kursu: `penalty_value = 600` (10 minut w sekundach).
 
-Finalnie, w `task-1/main.py` raportowana wartość kryterium to `total_cost - start_secs`, czyli (w przybliżeniu) „czas od startu do końca”, uwzględniający też kary.
+Finalnie, w `task-1/main.py` raportowana wartość kryterium to `total_cost - start_secs`, czyli „czas od startu do końca”.
 
 ### 3.2 Kryterium `p` (minimalizacja liczby przesiadek)
 
-W implementacji `p` jest modelowane pośrednio:
-
-- nadal liczymy składnik czasowy (jak w `t`), ale
-- przy zmianie `trip_id` wprowadzamy bardzo dużą karę `penalty_value = 1000000`.
-
-Intuicyjnie: ponieważ kara dominuje nad czasem, najlepsza trasa ma minimalizować liczbę zmian kursu (które odpowiadają przesiadkom w modelu „krawędź travel = konkretny kurs”).
+W implementacji `p` algorytmy minimalizują liczbę zmian `trip_id` na ścieżce (czyli w tym modelu liczbę przesiadek).
+Czas (`dep_time >= real_time`) jest wykorzystywany wyłącznie do dopuszczania krawędzi, natomiast nie jest wliczany do funkcji celu.
 
 ### 3.3 Stan w algorytmach: (wierzchołek, trip_id)
 
@@ -77,7 +72,7 @@ Algorytmy przechowują stany jako `(stop_id, last_trip_id)`:
 - dla krawędzi `"transfer"` `last_trip_id` nie zmienia się,
 - dla krawędzi `"travel"` `last_trip_id` ustawiany jest na `edge['trip_id']`.
 
-Dzięki temu kara za zmianę kursu działa poprawnie i nie „gubi się” podczas modelowania przesiadek.
+Dzięki temu licznik przesiadek działa poprawnie i nie „gubi się” podczas modelowania przesiadek.
 
 ## 4. Algorytmy i modyfikacje
 
@@ -118,13 +113,13 @@ Dzięki temu kara za zmianę kursu działa poprawnie i nie „gubi się” podcz
 W zadaniu interpretujemy rozwiązanie jako permutację listy przystanków do odwiedzenia, a koszt rozwiązania to:
 
 - dla `criterion='t'`: czas start -> ... -> powrót do A,
-- dla `criterion='p'`: koszt wewnętrzny algorytmu (z dominującą karą za zmianę `trip_id`).
+- dla `criterion='p'`: liczba zmian `trip_id` na całej złożonej trasie.
 
 **Implementacja (`task-1/algorithms/tabu_search.py`):**
 
 1. Rozwiązanie początkowe: losowa permutacja (`random.shuffle`).
 2. Sąsiedztwo: generowane przez zamianę miejsc dwóch przystanków (swap w permutacji).
-3. Tabu: tabu jest implementowane jako kolejka FIFO (`collections.deque`) o maksymalnym rozmiarze `tabu_size = len(stop_ids) * 2`, a do tabu dodawane jest bieżące „wybrane” rozwiązanie.
+3. Tabu: dla zadania 2b tabu jest implementowane jako kolejka FIFO (`collections.deque`) o maksymalnym rozmiarze `tabu_size = len(stop_ids) * 2`, a dla zadania 2a można uruchomić wariant bez limitu przekazując `tabu_unbounded`.
 4. Aspiracja:
    jeśli kandydat jest w tabu, ale ma koszt lepszy niż dotychczas najlepszy (`n_cost < best_cost`), może zostać dopuszczony.
 5. Strategia próbkowania sąsiedztwa:
@@ -189,7 +184,7 @@ Przypadek 4: `A*`, `p`, `Wrocław Główny -> Legnica`
 ```bash
 ./venv/bin/python main.py "Wrocław Główny" "Legnica" p 06:30:00 20260303 astar
 ```
-Wynik: odwiedzone stany `297`, czas `0.0112s`, wartość kryterium `3540`.
+Wynik: odwiedzone stany `297`, czas `0.0112s`, wartość kryterium = liczba przesiadek.
 
 Przypadek 5: `Tabu Search` (TSP po liście), `t`, `Legnica -> Jelenia Góra;Głogów`
 ```bash
@@ -202,7 +197,7 @@ Wynik: czas `1.1538s`, łączny koszt `(t)` `33600`.
 W tym trybie podajesz `B` jako listę przystanków rozdzieloną średnikami `;`:
 
 ```bash
-./venv/bin/python main.py "<Przystanek_A>" "<B1;B2;...;Bn>" <t/p> <HH:MM:SS> [YYYYMMDD] [astar/dijkstra/weighted_astar]
+./venv/bin/python main.py "<Przystanek_A>" "<B1;B2;...;Bn>" <t/p> <HH:MM:SS> [YYYYMMDD] [astar/dijkstra/weighted_astar|tabu_unbounded]
 ```
 
 Przykład (lista 3 przystanków, kryterium czasu `t`):
@@ -233,9 +228,9 @@ Przykład (lista 3 przystanków, kryterium czasu `t`):
 
 Najtrudniejsze rzeczy przy tym zadaniu to głównie kwestia modelu „czasowego” i liczenia odpowiedniego kosztu:
 
-1. Koszt `p` (czyli „ma być mało przesiadek”) zrobiłem jako dużą karę za zmianę `trip_id`. Nie liczę przesiadek „na sztywno”, tylko pozwalam tej karze wymuszać wybieranie tras z mniejszą liczbą zmian kursu.
+1. Koszt `p` (czyli „ma być mało przesiadek”) to wprost liczba zmian `trip_id` na trasie (czyli w tym modelu liczba przesiadek).
 
 2. W grafie czasowym musiałem pilnować, żeby dało się w ogóle skorzystać z krawędzi `travel`: `dep_time` musi być >= aktualny czas (`real_time`). Dodatkowo doszło przesunięcie godzin o `SEC_IN_DAY`, bo czasem trasa przechodzi przez północ.
 
-3. Żeby kara za zmianę kursu działała poprawnie, algorytmy muszą pamiętać `last_trip_id`. Dlatego stan jest typu `(stop_id, last_trip_id)`, a nie tylko `stop_id`.
+3. Żeby licznik przesiadek działał poprawnie, algorytmy muszą pamiętać `last_trip_id`. Dlatego stan jest typu `(stop_id, last_trip_id)`, a nie tylko `stop_id`.
 

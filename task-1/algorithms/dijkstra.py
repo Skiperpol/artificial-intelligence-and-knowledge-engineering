@@ -7,10 +7,11 @@ def dijkstra(graph, start_stop, end_stop, start_time_secs, mode='t'):
     visited_count = 0
     counter = itertools.count()
     
-    d_distances = {(start_stop, None): start_time_secs}
+    cost_init = start_time_secs if mode == 't' else 0
+    d_distances = {(start_stop, None): cost_init}
     p_predecessors = {} 
 
-    queue = [(start_time_secs, start_time_secs, next(counter), start_stop, None)]
+    queue = [(cost_init, start_time_secs, next(counter), start_stop, None)]
 
     while queue:
         curr_cost, real_time, _, u, last_trip_id = heapq.heappop(queue)
@@ -35,6 +36,7 @@ def dijkstra(graph, start_stop, end_stop, start_time_secs, mode='t'):
                     "from_stop": u, 
                     "from_trip": last_trip_id,
                     "to_stop": v,
+                    "to_trip": new_trip_id,
                     "line": edge.get('route_name', 'WALK'),
                     "dep": dep_time,
                     "arr": new_real_time

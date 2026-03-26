@@ -3,7 +3,7 @@ import math
 def calculate_edge_params(curr_cost, real_time, edge, last_trip_id, mode='t'):
     if edge.get('type') == 'transfer':
         new_real_time = real_time + edge['duration']
-        new_cost = curr_cost + edge['duration']
+        new_cost = curr_cost + (edge['duration'] if mode == 't' else 0)
         dep_from_u = real_time
         return new_cost, new_real_time, dep_from_u, last_trip_id 
     
@@ -11,14 +11,16 @@ def calculate_edge_params(curr_cost, real_time, edge, last_trip_id, mode='t'):
     if edge['dep_time'] < real_time:
         return None
 
-    penalty_value = 600 if mode == 't' else 1000000
-    penalty = 0
-    
-    if last_trip_id is not None and new_trip_id != last_trip_id:
-        penalty = penalty_value
-
     new_real_time = edge['arr_time']
-    new_cost = curr_cost + (edge['arr_time'] - real_time) + penalty
+    if mode == 't':
+        new_cost = curr_cost + (edge['arr_time'] - real_time)
+        if last_trip_id is not None and new_trip_id != last_trip_id:
+            new_cost += 300
+    else:
+        trip_change = False
+        if last_trip_id and new_trip_id:
+            trip_change = last_trip_id != new_trip_id
+        new_cost = curr_cost + (1 if trip_change else 0)
     dep_from_u = edge['dep_time']
     
     return new_cost, new_real_time, dep_from_u, new_trip_id

@@ -9,12 +9,13 @@ from algorithms.heuristics import get_heuristic
 def a_star(graph, start_stop, end_stop, start_time_secs, coords, mode='t'):
     visited_count = 0
     counter = itertools.count()
-    
-    d_distances = {(start_stop, None): start_time_secs}
+
+    cost_init = start_time_secs if mode == 't' else 0
+    d_distances = {(start_stop, None): cost_init}
     p_predecessors = {} 
     
     h_start = get_heuristic(start_stop, end_stop, coords, mode)
-    queue = [(start_time_secs + h_start, start_time_secs, start_time_secs, next(counter), start_stop, None)]
+    queue = [(cost_init + h_start, cost_init, start_time_secs, next(counter), start_stop, None)]
 
     while queue:
         f_curr, g_curr, real_time, _, u, last_trip_id = heapq.heappop(queue)
@@ -38,7 +39,10 @@ def a_star(graph, start_stop, end_stop, start_time_secs, coords, mode='t'):
                 d_distances[state] = new_g
                 h_val = get_heuristic(v, end_stop, coords, mode)
                 p_predecessors[state] = {
-                    "from_stop": u, "from_trip": last_trip_id, "to_stop": v,
+                    "from_stop": u,
+                    "from_trip": last_trip_id,
+                    "to_stop": v,
+                    "to_trip": new_tid,
                     "line": edge.get('route_name', 'WALK'), "dep": dep_t, "arr": new_real
                 }
                 heapq.heappush(queue, (new_g + h_val, new_g, new_real, next(counter), v, new_tid))
