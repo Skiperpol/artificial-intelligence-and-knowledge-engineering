@@ -11,7 +11,7 @@ def calculate_edge_params(curr_cost, real_time, edge, last_trip_id, mode='t'):
     if edge['dep_time'] < real_time:
         return None
 
-    penalty_value = 600 if mode == 't' else 100000000
+    penalty_value = 600 if mode == 't' else 1000000
     penalty = 0
     
     if last_trip_id is not None and new_trip_id != last_trip_id:

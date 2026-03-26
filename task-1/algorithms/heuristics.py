@@ -29,5 +29,4 @@ def get_heuristic(curr_stop_id, end_stop_id, coords, mode='t'):
     if mode == 'p' or curr_stop_id not in coords or end_stop_id not in coords:
         return 0
     distance_km = haversine_distance(coords[curr_stop_id], coords[end_stop_id])
-    # Dopuszczalna prędkość: 120 km/h
     return (distance_km / 120) * 3600
