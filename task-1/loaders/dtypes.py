@@ -18,7 +18,6 @@ GTFS_DTYPES: dict[str, dict[str, str]] = {
         "trip_id": "string",
         "route_id": "string",
         "service_id": "string",
-        "block_id": "string",
     },
     "routes": {
         "route_id": "string",
