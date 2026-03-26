@@ -1,17 +1,8 @@
 import math
 
 def haversine_distance(coords1, coords2):
-    if isinstance(coords1, dict):
-        lat1 = float(coords1.get('stop_lat', 0))
-        lon1 = float(coords1.get('stop_lon', 0))
-        lat2 = float(coords2.get('stop_lat', 0))
-        lon2 = float(coords2.get('stop_lon', 0))
-    else:
-        try:
-            lat1, lon1 = float(coords1[0]), float(coords1[1])
-            lat2, lon2 = float(coords2[0]), float(coords2[1])
-        except (KeyError, IndexError):
-            lat1, lon1 = 0, 0
+    lat1, lon1 = float(coords1['stop_lat']), float(coords1['stop_lon'])
+    lat2, lon2 = float(coords2['stop_lat']), float(coords2['stop_lon'])
 
     if lat1 == 0 or lat2 == 0:
         return 0.0
@@ -20,8 +11,7 @@ def haversine_distance(coords1, coords2):
     d_lat = math.radians(lat2 - lat1)
     d_lon = math.radians(lon2 - lon1)
     
-    a = (math.sin(d_lat / 2)**2 + 
-         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(d_lon / 2)**2)
+    a = (math.sin(d_lat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(d_lon / 2)**2)
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
     

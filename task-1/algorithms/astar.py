@@ -9,6 +9,7 @@ from algorithms.heuristics import get_heuristic
 def a_star(graph, start_stop, end_stop, start_time_secs, coords, mode='t'):
     visited_count = 0
     counter = itertools.count()
+    
     d_distances = {(start_stop, None): start_time_secs}
     p_predecessors = {} 
     
