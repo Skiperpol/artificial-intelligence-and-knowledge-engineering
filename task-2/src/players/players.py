@@ -19,3 +19,6 @@ class FirstPlayer(Player):
 class SecondPlayer(Player):
     def __init__(self) -> None:
         super().__init__(name="Player 2", symbol="W", direction=-1, goal_row=0)
+
+def get_opponent(player: Player) -> Player:
+    return SecondPlayer() if player.symbol == "B" else FirstPlayer()
