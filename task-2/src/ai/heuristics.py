@@ -43,3 +43,71 @@ def mobility_heuristic(board: Board, perspective: Player) -> float:
     my_moves = len(board.get_legal_moves(perspective))
     opp_moves = len(board.get_legal_moves(get_opponent(perspective)))
     return float(my_moves - opp_moves)
+
+
+def goal_pressure_heuristic(board: Board, perspective: Player) -> float:
+    my_positions = _piece_positions(board, perspective.symbol)
+    opp_positions = _piece_positions(board, perspective.opponent_symbol())
+
+    my_closest = BOARD_SIZE
+    for row, _ in my_positions:
+        distance = (BOARD_SIZE - 1 - row) if perspective.symbol == "B" else row
+        my_closest = min(my_closest, distance)
+
+    opp_closest = BOARD_SIZE
+    for row, _ in opp_positions:
+        distance = row if perspective.symbol == "B" else (BOARD_SIZE - 1 - row)
+        opp_closest = min(opp_closest, distance)
+
+    return float(opp_closest - my_closest)
+
+
+def center_control_heuristic(board: Board, perspective: Player) -> float:
+    center_low = (BOARD_SIZE // 2) - 1
+    center_high = BOARD_SIZE // 2
+
+    my_score = 0
+    opp_score = 0
+
+    for row, col in _piece_positions(board, perspective.symbol):
+        if center_low <= row <= center_high and center_low <= col <= center_high:
+            my_score += 2
+        elif center_low <= col <= center_high:
+            my_score += 1
+
+    for row, col in _piece_positions(board, perspective.opponent_symbol()):
+        if center_low <= row <= center_high and center_low <= col <= center_high:
+            opp_score += 2
+        elif center_low <= col <= center_high:
+            opp_score += 1
+
+    return float(my_score - opp_score)
+
+
+def threatened_pieces_heuristic(board: Board, perspective: Player) -> float:
+    my_symbol = perspective.symbol
+    opp_symbol = perspective.opponent_symbol()
+    my_direction = perspective.direction
+    opp_direction = -my_direction
+
+    my_threatened = 0
+    opp_threatened = 0
+
+    for row in range(BOARD_SIZE):
+        for col in range(BOARD_SIZE):
+            if board.grid[row][col] == my_symbol:
+                attacker_row = row - opp_direction
+                for attacker_col in (col - 1, col + 1):
+                    if 0 <= attacker_row < BOARD_SIZE and 0 <= attacker_col < BOARD_SIZE:
+                        if board.grid[attacker_row][attacker_col] == opp_symbol:
+                            my_threatened += 1
+                            break
+            elif board.grid[row][col] == opp_symbol:
+                attacker_row = row - my_direction
+                for attacker_col in (col - 1, col + 1):
+                    if 0 <= attacker_row < BOARD_SIZE and 0 <= attacker_col < BOARD_SIZE:
+                        if board.grid[attacker_row][attacker_col] == my_symbol:
+                            opp_threatened += 1
+                            break
+
+    return float(opp_threatened - my_threatened)

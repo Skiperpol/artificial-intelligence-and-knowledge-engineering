@@ -7,7 +7,14 @@ from typing import Callable, Dict, List, Optional
 
 from engine.board import Board, Move
 from players.players import Player, get_opponent
-from ai.heuristics import advancement_heuristic, material_heuristic, mobility_heuristic
+from ai.heuristics import (
+    advancement_heuristic,
+    center_control_heuristic,
+    goal_pressure_heuristic,
+    material_heuristic,
+    mobility_heuristic,
+    threatened_pieces_heuristic,
+)
 
 Heuristic = Callable[[Board, Player], float]
 
@@ -27,6 +34,9 @@ HEURISTICS: Dict[str, Heuristic] = {
     "material": material_heuristic,
     "advancement": advancement_heuristic,
     "mobility": mobility_heuristic,
+    "goal_pressure": goal_pressure_heuristic,
+    "center_control": center_control_heuristic,
+    "threatened_pieces": threatened_pieces_heuristic,
 }
 
 
