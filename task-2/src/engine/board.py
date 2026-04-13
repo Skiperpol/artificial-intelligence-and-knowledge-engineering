@@ -127,6 +127,8 @@ class Board:
         grid_data = []
         for line in lines:
             cells = line.split()
-            grid.append(cells)
+            if len(cells) != BOARD_SIZE:
+                raise ValueError(f"Each board row must have exactly {BOARD_SIZE} cells.")
+            grid_data.append(cells)
 
-        return cls(grid)
+        return cls(grid_data)

@@ -2,10 +2,19 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import random
 import select
 import sys
 
-from ai.minimax import HEURISTICS, choose_best_move, get_opponent
+from ai.agent_logic import (
+    choose_adaptive_heuristic,
+    choose_agent_type_for_player,
+    choose_depth_for_player,
+    choose_epsilon_for_player,
+    choose_heuristic_for_player,
+    choose_move_for_agent,
+)
+from ai.minimax import HEURISTICS, get_opponent
 from engine.board import BOARD_SIZE, Board
 from engine.game_logger import GameLogger
 from players.players import FirstPlayer, Player, SecondPlayer
@@ -17,7 +26,19 @@ def parse_args() -> argparse.Namespace:
         "--depth",
         type=int,
         default=3,
-        help="Maximum search depth for Minimax (default: 3)",
+        help="Default maximum search depth for Minimax agents (default: 3).",
+    )
+    parser.add_argument(
+        "--depth-p1",
+        type=int,
+        default=None,
+        help="Maximum search depth for player 1 agent.",
+    )
+    parser.add_argument(
+        "--depth-p2",
+        type=int,
+        default=None,
+        help="Maximum search depth for player 2 agent.",
     )
     parser.add_argument(
         "--heuristic-p1",
@@ -35,6 +56,41 @@ def parse_args() -> argparse.Namespace:
         "--no-alpha-beta",
         action="store_true",
         help="Disable alpha-beta pruning.",
+    )
+    parser.add_argument(
+        "--agent-p1",
+        choices=["minimax", "random", "epsilon-greedy"],
+        default="minimax",
+        help="Agent type for player 1 (B).",
+    )
+    parser.add_argument(
+        "--agent-p2",
+        choices=["minimax", "random", "epsilon-greedy"],
+        default="minimax",
+        help="Agent type for player 2 (W).",
+    )
+    parser.add_argument(
+        "--epsilon-p1",
+        type=float,
+        default=0.15,
+        help="Random move probability for player 1 epsilon-greedy agent.",
+    )
+    parser.add_argument(
+        "--epsilon-p2",
+        type=float,
+        default=0.15,
+        help="Random move probability for player 2 epsilon-greedy agent.",
+    )
+    parser.add_argument(
+        "--adaptive-strategy",
+        action="store_true",
+        help="Enable dynamic heuristic switching based on board state.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Seed for pseudo-random choices (default: 42).",
     )
     parser.add_argument(
         "--max-rounds",
@@ -69,12 +125,9 @@ def print_board(board: Board) -> None:
         print(line)
 
 
-def choose_heuristic_for_player(player: Player, p1_heuristic: str, p2_heuristic: str) -> str:
-    return p1_heuristic if player.symbol == "B" else p2_heuristic
-
-
 def main() -> None:
     args = parse_args()
+    random.seed(args.seed)
     board = read_board_from_stdin()
     logs_dir = Path(__file__).resolve().parents[1] / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -105,34 +158,45 @@ def main() -> None:
             winner = get_opponent(current_player)
             break
 
-        heuristic_name = choose_heuristic_for_player(
+        base_heuristic_name = choose_heuristic_for_player(
             current_player,
             args.heuristic_p1,
             args.heuristic_p2,
         )
-        search = choose_best_move(
+        heuristic_name = (
+            choose_adaptive_heuristic(board, current_player, base_heuristic_name)
+            if args.adaptive_strategy
+            else base_heuristic_name
+        )
+        depth = choose_depth_for_player(current_player, args.depth, args.depth_p1, args.depth_p2)
+        agent_type = choose_agent_type_for_player(current_player, args.agent_p1, args.agent_p2)
+        epsilon = choose_epsilon_for_player(current_player, args.epsilon_p1, args.epsilon_p2)
+
+        move, visited_nodes, elapsed_seconds = choose_move_for_agent(
             board=board,
             player=current_player,
-            depth=args.depth,
+            agent_type=agent_type,
+            depth=depth,
             heuristic_name=heuristic_name,
             use_alpha_beta=not args.no_alpha_beta,
+            epsilon=epsilon,
         )
-        total_visited_nodes += search.visited_nodes
-        total_time += search.elapsed_seconds
+        total_visited_nodes += visited_nodes
+        total_time += elapsed_seconds
 
-        if search.best_move is None:
+        if move is None:
             winner = get_opponent(current_player)
             break
 
-        board.apply_move(search.best_move, current_player)
+        board.apply_move(move, current_player)
         rounds += 1
         logger.log_turn(
             round_no=rounds,
             player=current_player,
-            move=search.best_move,
+            move=move,
             heuristic_name=heuristic_name,
-            visited_nodes=search.visited_nodes,
-            elapsed_seconds=search.elapsed_seconds,
+            visited_nodes=visited_nodes,
+            elapsed_seconds=elapsed_seconds,
             board_after_move=board,
         )
         current_player = player_2 if current_player.symbol == "B" else player_1
