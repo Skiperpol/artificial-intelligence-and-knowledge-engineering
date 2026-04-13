@@ -31,6 +31,7 @@ def copy_board(board: Board) -> Board:
     return Board([row[:] for row in board.grid])
 
 HEURISTICS: Dict[str, Heuristic] = {
+    # [Punkt 2] Rejestr heurystyk dostępnych z CLI.
     "material": material_heuristic,
     "advancement": advancement_heuristic,
     "mobility": mobility_heuristic,
@@ -63,6 +64,7 @@ def _minimax(
     use_alpha_beta: bool,
     counters: Dict[str, int],
 ) -> float:
+    # [Punkt 3] Właściwy minimax (max dla gracza korzenia, min dla przeciwnika).
     counters["visited_nodes"] += 1
     
     terminal_score = _evaluate_terminal(board, root_player, current_player)
@@ -94,6 +96,7 @@ def _minimax(
             beta = min(beta, best_value)
 
         if use_alpha_beta and beta <= alpha:
+            # [Punkt 4] Alfa-beta: odcinamy gałąź, która nie wpłynie na decyzję.
             break
             
     return best_value
@@ -106,6 +109,7 @@ def choose_best_move(
     heuristic_name: str,
     use_alpha_beta: bool = True,
 ) -> SearchResult:
+    # [Punkt 3/4] Przegląd ruchów korzenia i wybór najlepszego wg minimax/alfa-beta.
     heuristic = HEURISTICS.get(heuristic_name)
     if heuristic is None:
         raise ValueError(f"Unknown heuristic: {heuristic_name}")

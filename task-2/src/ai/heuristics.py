@@ -11,12 +11,14 @@ def _piece_positions(board: Board, symbol: str) -> List[tuple[int, int]]:
     return positions
 
 def material_heuristic(board: Board, perspective: Player) -> float:
+    # [Punkt 2] Strategia 1: przewaga liczby pionów.
     my_count = len(_piece_positions(board, perspective.symbol))
     opp_count = len(_piece_positions(board, perspective.opponent_symbol()))
     return float(my_count - opp_count)
 
 
 def advancement_heuristic(board: Board, perspective: Player) -> float:
+    # [Punkt 2] Strategia 2: jak daleko piony są przesunięte w stronę mety.
     my_total_advancement = 0
     opp_total_advancement = 0
 
@@ -40,12 +42,14 @@ def advancement_heuristic(board: Board, perspective: Player) -> float:
     return float(my_total_advancement - opp_total_advancement)
 
 def mobility_heuristic(board: Board, perspective: Player) -> float:
+    # [Punkt 2] Strategia 3: przewaga liczby legalnych ruchów.
     my_moves = len(board.get_legal_moves(perspective))
     opp_moves = len(board.get_legal_moves(get_opponent(perspective)))
     return float(my_moves - opp_moves)
 
 
 def goal_pressure_heuristic(board: Board, perspective: Player) -> float:
+    # [Punkt 2] Strategia 4: porównanie dystansu najszybszego pionu do celu.
     my_positions = _piece_positions(board, perspective.symbol)
     opp_positions = _piece_positions(board, perspective.opponent_symbol())
 
@@ -63,6 +67,7 @@ def goal_pressure_heuristic(board: Board, perspective: Player) -> float:
 
 
 def center_control_heuristic(board: Board, perspective: Player) -> float:
+    # [Punkt 2] Strategia 5: bonus za kontrolę centralnych pól planszy.
     center_low = (BOARD_SIZE // 2) - 1
     center_high = BOARD_SIZE // 2
 
@@ -85,6 +90,7 @@ def center_control_heuristic(board: Board, perspective: Player) -> float:
 
 
 def threatened_pieces_heuristic(board: Board, perspective: Player) -> float:
+    # [Punkt 2] Strategia 6: bilans pionów zagrożonych biciem.
     my_symbol = perspective.symbol
     opp_symbol = perspective.opponent_symbol()
     my_direction = perspective.direction
