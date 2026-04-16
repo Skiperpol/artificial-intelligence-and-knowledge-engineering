@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import random
-import select
 import sys
 
 from ai.agent_logic import (
@@ -15,7 +14,7 @@ from ai.agent_logic import (
     choose_move_for_agent,
 )
 from ai.minimax import HEURISTICS, get_opponent
-from engine.board import BOARD_SIZE, Board
+from engine.board import Board
 from engine.game_logger import GameLogger
 from players.players import FirstPlayer, Player, SecondPlayer
 
@@ -106,20 +105,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def read_board_from_stdin() -> Board:
-    if sys.stdin.isatty():
-        return Board()
-    ready, _, _ = select.select([sys.stdin], [], [], 0.0)
-    if not ready:
-        return Board()
-    lines = [line.strip() for line in sys.stdin.read().splitlines() if line.strip()]
-    if not lines:
-        return Board()
-    if len(lines) != BOARD_SIZE:
-        raise ValueError("Expected exactly 8 non-empty lines for input board.")
-    return Board.from_lines(lines)
-
-
 def print_board(board: Board) -> None:
     for line in board.to_lines():
         print(line)
@@ -128,7 +113,7 @@ def print_board(board: Board) -> None:
 def main() -> None:
     args = parse_args()
     random.seed(args.seed)
-    board = read_board_from_stdin()
+    board = Board()
     logs_dir = Path(__file__).resolve().parents[1] / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
     log_path = logs_dir / Path(args.log_file).name
