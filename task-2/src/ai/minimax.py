@@ -7,16 +7,7 @@ from typing import Callable, Dict, List, Optional
 
 from engine.board import Board, Move
 from players.players import Player, get_opponent
-from ai.heuristics import (
-    advancement_heuristic,
-    center_control_heuristic,
-    goal_pressure_heuristic,
-    material_heuristic,
-    mobility_heuristic,
-    threatened_pieces_heuristic,
-)
-
-Heuristic = Callable[[Board, Player], float]
+from ai.heuristics import HEURISTICS
 
 
 @dataclass
@@ -26,20 +17,8 @@ class SearchResult:
     visited_nodes: int
     elapsed_seconds: float
 
-
 def copy_board(board: Board) -> Board:
     return Board([row[:] for row in board.grid])
-
-HEURISTICS: Dict[str, Heuristic] = {
-    # [Punkt 2] Rejestr heurystyk dostępnych z CLI.
-    "material": material_heuristic,
-    "advancement": advancement_heuristic,
-    "mobility": mobility_heuristic,
-    "goal_pressure": goal_pressure_heuristic,
-    "center_control": center_control_heuristic,
-    "threatened_pieces": threatened_pieces_heuristic,
-}
-
 
 def _evaluate_terminal(board: Board, root_player: Player, current_player: Player) -> Optional[float]:
     opponent = get_opponent(current_player)

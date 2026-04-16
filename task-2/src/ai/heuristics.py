@@ -1,4 +1,4 @@
-from typing import List
+from typing import Callable, Dict, List
 from engine.board import BOARD_SIZE, Board
 from players.players import Player, get_opponent
 
@@ -123,3 +123,13 @@ def threatened_pieces_heuristic(board: Board, perspective: Player) -> float:
                             break
 
     return float(opp_threatened - my_threatened)
+
+Heuristic = Callable[[Board, Player], float]
+HEURISTICS: Dict[str, Heuristic] = {
+    "material": material_heuristic,
+    "advancement": advancement_heuristic,
+    "mobility": mobility_heuristic,
+    "goal_pressure": goal_pressure_heuristic,
+    "center_control": center_control_heuristic,
+    "threatened_pieces": threatened_pieces_heuristic,
+}
