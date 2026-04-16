@@ -9,23 +9,36 @@ from players.players import Player
 
 
 def choose_heuristic_for_player(player: Player, p1_heuristic: str, p2_heuristic: str) -> str:
-    # [Punkt 5] Każdy agent może mieć własną heurystykę.
-    return p1_heuristic if player.symbol == "B" else p2_heuristic
+    if player.symbol == "B":
+        return p1_heuristic
+
+    return p2_heuristic
 
 
 def choose_depth_for_player(player: Player, default_depth: int, p1_depth: int | None, p2_depth: int | None) -> int:
-    # [Punkt 5] Każdy agent może mieć własną głębokość przeszukiwania.
-    selected_depth = p1_depth if player.symbol == "B" else p2_depth
-    return selected_depth if selected_depth is not None else default_depth
+    if player.symbol == "B":
+        selected_depth = p1_depth
+    else:
+        selected_depth = p2_depth
+
+    if selected_depth is not None:
+        return selected_depth
+
+    return default_depth
 
 
 def choose_agent_type_for_player(player: Player, p1_agent_type: str, p2_agent_type: str) -> str:
-    # [Punkt 5] Dwa niezależne typy agentów (np. minimax vs random).
-    return p1_agent_type if player.symbol == "B" else p2_agent_type
+    if player.symbol == "B":
+        return p1_agent_type
+
+    return p2_agent_type
 
 
 def choose_epsilon_for_player(player: Player, p1_epsilon: float, p2_epsilon: float) -> float:
-    return p1_epsilon if player.symbol == "B" else p2_epsilon
+    if player.symbol == "B":
+        return p1_epsilon
+
+    return p2_epsilon
 
 
 def _distance_to_goal(board: Board, player: Player) -> int:
@@ -37,7 +50,12 @@ def _distance_to_goal(board: Board, player: Player) -> int:
     if not pieces_rows:
         return BOARD_SIZE
     if player.symbol == "B":
-        return min((BOARD_SIZE - 1) - row for row in pieces_rows)
+        distances = []
+        for row in pieces_rows:
+            dist = (BOARD_SIZE - 1) - row
+            distances.append(dist)
+
+        return min(distances)
     return min(pieces_rows)
 
 
@@ -47,7 +65,10 @@ def choose_adaptive_heuristic(board: Board, player: Player, fallback_heuristic: 
         return "advancement"
     if material_heuristic(board, player) < 0:
         return "material"
-    return "mobility" if fallback_heuristic == "advancement" else fallback_heuristic
+    if fallback_heuristic == "advancement":
+        return "mobility"
+
+    return fallback_heuristic
 
 
 def choose_move_for_agent(
