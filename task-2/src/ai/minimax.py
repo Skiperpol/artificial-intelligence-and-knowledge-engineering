@@ -18,7 +18,13 @@ class SearchResult:
     elapsed_seconds: float
 
 def copy_board(board: Board) -> Board:
-    return Board([row[:] for row in board.grid])
+    new_grid = []
+    
+    for row in board.grid:
+        new_row = row[:] 
+        new_grid.append(new_row)
+        
+    return Board(new_grid)
 
 def _evaluate_terminal(board: Board, root_player: Player, current_player: Player) -> Optional[float]:
     opponent = get_opponent(current_player)
@@ -27,9 +33,15 @@ def _evaluate_terminal(board: Board, root_player: Player, current_player: Player
     if board.has_player_won(get_opponent(root_player)):
         return -10_000.0
     if not board.get_legal_moves(current_player):
-        return -10_000.0 if current_player.symbol == root_player.symbol else 10_000.0
+        if current_player.symbol == root_player.symbol:
+            return -10_000.0
+        else:
+            return 10_000.0
     if not board.get_legal_moves(opponent):
-        return 10_000.0 if current_player.symbol == root_player.symbol else -10_000.0
+        if current_player.symbol == root_player.symbol:
+            return 10_000.0
+        else:
+            return -10_000.0
     return None
 
 def _minimax(
@@ -43,7 +55,7 @@ def _minimax(
     use_alpha_beta: bool,
     counters: Dict[str, int],
 ) -> float:
-    # [Punkt 3] Właściwy minimax (max dla gracza korzenia, min dla przeciwnika).
+    # [Punkt 3] Minimax (max dla gracza, min dla przeciwnika).
     counters["visited_nodes"] += 1
     
     terminal_score = _evaluate_terminal(board, root_player, current_player)
@@ -56,7 +68,10 @@ def _minimax(
     is_maximizing = (current_player.symbol == root_player.symbol)
     next_player = get_opponent(current_player)
     
-    best_value = -inf if is_maximizing else inf
+    if is_maximizing:
+        best_value = -inf
+    else:
+        best_value = inf
     
     for move in legal_moves:
         new_board = copy_board(board)
@@ -88,7 +103,6 @@ def choose_best_move(
     heuristic_name: str,
     use_alpha_beta: bool = True,
 ) -> SearchResult:
-    # [Punkt 3/4] Przegląd ruchów korzenia i wybór najlepszego wg minimax/alfa-beta.
     heuristic = HEURISTICS.get(heuristic_name)
     if heuristic is None:
         raise ValueError(f"Unknown heuristic: {heuristic_name}")
