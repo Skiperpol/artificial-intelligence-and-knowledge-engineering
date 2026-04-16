@@ -74,7 +74,6 @@ def choose_adaptive_heuristic(board: Board, player: Player, fallback_heuristic: 
 def choose_move_for_agent(
     board: Board,
     player: Player,
-    *,
     agent_type: str,
     depth: int,
     heuristic_name: str,
