@@ -12,20 +12,22 @@ LAST_MOVE_FROM = "o"
 
 @dataclass(frozen=True)
 class Move:
-    # [Punkt 1] Reprezentacja akcji w drzewie gry: skąd, dokąd i czy było bicie.
     from_row: int
     from_col: int
     to_row: int
     to_col: int
     is_capture: bool
 
-
 class Board:
+    # [Punkt 1] Poprawne zdefiniowanie stanu gry.
     def __init__(self, grid: Sequence[Sequence[str]] | None = None) -> None:
         if grid is None:
             self.grid = self._default_start_position()
         else:
-            self.grid = [list(row) for row in grid]
+            self.grid = []
+            for row in grid:
+                new_row = list(row)
+                self.grid.append(new_row)
             self._validate_grid()
 
     @staticmethod
@@ -62,7 +64,7 @@ class Board:
         return cell in {EMPTY, LAST_MOVE_FROM}
 
     def get_legal_moves(self, player: Player) -> List[Move]:
-        # [Punkt 1] Generator ruchów dla danego stanu i gracza.
+        # [Punkt 1] Funkcja generująca możliwe ruchy dla danego stanu i gracza.
         moves: List[Move] = []
         for row in range(BOARD_SIZE):
             for col in range(BOARD_SIZE):
@@ -104,7 +106,6 @@ class Board:
         self.grid[move.to_row][move.to_col] = player.symbol
 
     def has_player_won(self, player: Player) -> bool:
-        # [Punkt 1] Warunek terminalny stanu gry: pion dotarł do wiersza celu.
         meta_player = self.grid[player.goal_row]
         
         for cell in meta_player:

@@ -55,12 +55,18 @@ def goal_pressure_heuristic(board: Board, perspective: Player) -> float:
 
     my_closest = BOARD_SIZE
     for row, _ in my_positions:
-        distance = (BOARD_SIZE - 1 - row) if perspective.symbol == "B" else row
+        if perspective.symbol == "B":
+            distance = BOARD_SIZE - 1 - row
+        else:
+            distance = row
         my_closest = min(my_closest, distance)
 
     opp_closest = BOARD_SIZE
     for row, _ in opp_positions:
-        distance = row if perspective.symbol == "B" else (BOARD_SIZE - 1 - row)
+        if perspective.symbol == "B":
+            distance = row
+        else:
+            distance = BOARD_SIZE - 1 - row
         opp_closest = min(opp_closest, distance)
 
     return float(opp_closest - my_closest)
@@ -92,8 +98,8 @@ def center_control_heuristic(board: Board, perspective: Player) -> float:
 def threatened_pieces_heuristic(board: Board, perspective: Player) -> float:
     # [Punkt 2] Strategia 6: bilans pionów zagrożonych biciem.
     my_symbol = perspective.symbol
-    opp_symbol = perspective.opponent_symbol()
     my_direction = perspective.direction
+    opp_symbol = perspective.opponent_symbol()
     opp_direction = -my_direction
 
     my_threatened = 0
