@@ -18,6 +18,8 @@ from engine.board import Board
 from engine.game_logger import GameLogger
 from players.players import FirstPlayer, Player, SecondPlayer
 
+# python main.py --agent-p1 minimax --agent-p2 minimax --heuristic-p1 advancement --heuristic-p2 advancement --depth 3
+# python main.py --agent-p1 minimax --agent-p2 epsilon-greedy --depth-p1 4 --depth-p2 2 --adaptive-strategy --epsilon-p2 0.2
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Breakthrough Minimax")
