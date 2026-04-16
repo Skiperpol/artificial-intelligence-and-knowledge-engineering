@@ -150,11 +150,10 @@ def main() -> None:
             args.heuristic_p1,
             args.heuristic_p2,
         )
-        heuristic_name = (
-            choose_adaptive_heuristic(board, current_player, base_heuristic_name)
-            if args.adaptive_strategy
-            else base_heuristic_name
-        )
+        if args.adaptive_strategy:
+            heuristic_name = choose_adaptive_heuristic(board, current_player, base_heuristic_name)
+        else:
+            heuristic_name = base_heuristic_name
         depth = choose_depth_for_player(current_player, args.depth, args.depth_p1, args.depth_p2)
         agent_type = choose_agent_type_for_player(current_player, args.agent_p1, args.agent_p2)
         epsilon = choose_epsilon_for_player(current_player, args.epsilon_p1, args.epsilon_p2)
