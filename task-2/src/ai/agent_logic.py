@@ -81,7 +81,6 @@ def choose_move_for_agent(
     use_alpha_beta: bool,
     epsilon: float,
 ) -> tuple[Move | None, int, float]:
-    # [Punkt 5] Wspólny interfejs ruchu dla wielu agentów w jednej rozgrywce.
     legal_moves = board.get_legal_moves(player)
     if not legal_moves:
         return None, 1, 0.0
@@ -89,7 +88,6 @@ def choose_move_for_agent(
     if agent_type == "random":
         return random.choice(legal_moves), 1, 0.0
 
-    # [Punkt 5] Epsilon-greedy: eksploracja ruchów przez kontrolowaną losowość.
     if agent_type == "epsilon-greedy" and random.random() < epsilon:
         return random.choice(legal_moves), 1, 0.0
 
