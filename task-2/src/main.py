@@ -14,7 +14,7 @@ from ai.agent_logic import (
     choose_move_for_agent,
 )
 from ai.minimax import HEURISTICS, get_opponent
-from engine.board import Board
+from engine.board import BOARD_SIZE, Board
 from engine.game_logger import GameLogger
 from players.players import FirstPlayer, Player, SecondPlayer
 
@@ -104,7 +104,28 @@ def parse_args() -> argparse.Namespace:
         default="task-2/game_log.txt",
         help="Path to output log file with move-by-move game history.",
     )
+    parser.add_argument(
+        "--board-from-stdin",
+        action="store_true",
+        help=(
+            f"Read the starting board as exactly {BOARD_SIZE} lines from stdin "
+            "(space-separated B W _ o per line). Heuristic and depth stay on the CLI."
+        ),
+    )
     return parser.parse_args()
+
+
+def read_board_from_stdin() -> Board:
+    lines: list[str] = []
+    for _ in range(BOARD_SIZE):
+        line = sys.stdin.readline()
+        if line == "":
+            raise SystemExit(
+                f"stdin ended before {BOARD_SIZE} board lines "
+                "(expected full board, space-separated tokens per line)."
+            )
+        lines.append(line.rstrip("\n\r"))
+    return Board.from_lines(lines)
 
 
 def print_board(board: Board) -> None:
@@ -115,7 +136,7 @@ def print_board(board: Board) -> None:
 def main() -> None:
     args = parse_args()
     random.seed(args.seed)
-    board = Board()
+    board = read_board_from_stdin() if args.board_from_stdin else Board()
     logs_dir = Path(__file__).resolve().parents[1] / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
     log_path = logs_dir / Path(args.log_file).name
