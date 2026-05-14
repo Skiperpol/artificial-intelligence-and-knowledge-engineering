@@ -1,3 +1,5 @@
+# [TEST]: Test sprawdza, czy silnik faktycznie wybrał ten ruch, który sam ocenił jako najlepszy.
+
 import time
 
 from _setup import Runner

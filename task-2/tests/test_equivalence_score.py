@@ -1,3 +1,5 @@
+# [TEST]: Test sprawdza, czy włączenie optymalizacji alfa-beta nie zmienia ostatecznego wyniku punktowego.
+
 import time
 
 from _setup import Runner

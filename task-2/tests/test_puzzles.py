@@ -1,3 +1,5 @@
+# [TEST]: Test sprawdza, czy silnik widzi oczywiste ruchy: maty w jednym posunięciu oraz bicia przymusowe.
+
 import time
 
 from _setup import Runner

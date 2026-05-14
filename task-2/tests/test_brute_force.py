@@ -1,3 +1,6 @@
+# [TEST]: Test weryfikuje, czy optymalizacje silnika (jak alfa-beta) nie psują wyniku, 
+#         porównując go z pewną, choć wolniejszą metodą naiwnego minimaxa.
+
 import time
 
 from _setup import Runner
