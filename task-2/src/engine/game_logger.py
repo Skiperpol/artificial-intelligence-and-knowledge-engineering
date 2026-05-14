@@ -44,4 +44,4 @@ class GameLogger:
         with open(self.output_path, "a", encoding="utf-8") as log_file:
             log_file.write("\n--- GAME END ---\n")
             log_file.write(f"rounds={rounds}\n")
-            log_file.write(f"winner={winner_name if winner_name else 'brak'}\n")
+            log_file.write(f"winner={winner_name if winner_name else 'none'}\n")

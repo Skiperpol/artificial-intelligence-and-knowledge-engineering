@@ -49,9 +49,9 @@ class Board:
     @staticmethod
     def _default_start_position(rows: int, cols: int) -> List[List[str]]:
         if rows < 2:
-            raise ValueError("Plansza musi mieć co najmniej 2 wiersze.")
+            raise ValueError("Board must have at least 2 rows.")
         if cols < 1:
-            raise ValueError("Plansza musi mieć co najmniej 1 kolumnę.")
+            raise ValueError("Board must have at least 1 column.")
 
         grid: List[List[str]] = [[EMPTY] * cols for _ in range(rows)]
         setup_depth = min(2, rows // 2)
@@ -65,13 +65,13 @@ class Board:
 
     def _validate_grid(self) -> None:
         if self.rows < 2:
-            raise ValueError("Plansza musi mieć co najmniej 2 wiersze.")
+            raise ValueError("Board must have at least 2 rows.")
         w = len(self.grid[0])
         if w < 1:
-            raise ValueError("Plansza musi mieć co najmniej 1 kolumnę.")
+            raise ValueError("Board must have at least 1 column.")
         for row in self.grid:
             if len(row) != w:
-                raise ValueError("Wszystkie wiersze muszą mieć tę samą liczbę kolumn.")
+                raise ValueError("All rows must have the same number of columns.")
             for cell in row:
                 if cell not in {"B", "W", EMPTY, LAST_MOVE_FROM}:
                     raise ValueError(f"Invalid board token: {cell}")
@@ -147,7 +147,7 @@ class Board:
     def from_lines(cls, lines: Sequence[str]) -> "Board":
         stripped = [line.rstrip("\n\r") for line in lines]
         if not stripped:
-            raise ValueError("Brak linii opisujących planszę.")
+            raise ValueError("No lines describing the board.")
 
         grid_data: List[List[str]] = []
         expected_width: int | None = None
@@ -157,8 +157,8 @@ class Board:
                 expected_width = len(cells)
             elif len(cells) != expected_width:
                 raise ValueError(
-                    f"Każdy wiersz musi mieć tę samą liczbę pól (oczekiwano {expected_width}, "
-                    f"dostano {len(cells)})."
+                    f"Each row must have the same number of cells "
+                    f"(expected {expected_width}, got {len(cells)})."
                 )
             grid_data.append(cells)
 

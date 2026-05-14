@@ -26,14 +26,14 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=8,
         metavar="R",
-        help="Liczba wierszy planszy (domyślnie 8). Musi być >= 2.",
+        help="Number of board rows (default: 8). Must be >= 2.",
     )
     parser.add_argument(
         "--cols",
         type=int,
         default=8,
         metavar="C",
-        help="Liczba kolumn planszy (domyślnie 8). Musi być >= 1.",
+        help="Number of board columns (default: 8). Must be >= 1.",
     )
     parser.add_argument(
         "--depth",
@@ -120,9 +120,9 @@ def parse_args() -> argparse.Namespace:
         "--board-from-stdin",
         action="store_true",
         help=(
-            "Wczytaj startową planszę ze stdin: dokładnie --rows linii, "
-            "w każdej --cols pól oddzielonych spacjami (B W _ o). "
-            "Wymiary muszą zgadzać się z --rows i --cols."
+            "Read the starting board from stdin: exactly --rows lines, "
+            "each with --cols space-separated cells (B W _ o). "
+            "Dimensions must match --rows and --cols."
         ),
     )
     return parser.parse_args()
@@ -134,15 +134,15 @@ def read_board_from_stdin(rows: int, cols: int) -> Board:
         line = sys.stdin.readline()
         if line == "":
             raise SystemExit(
-                f"stdin skończył się przed {rows} liniami planszy "
-                "(oczekiwano pełnej siatki: --rows linii, w każdej --cols pól)."
+                f"stdin ended before {rows} board lines "
+                f"(expected a full grid: --rows lines of --cols cells each)."
             )
         lines.append(line.rstrip("\n\r"))
     board = Board.from_lines(lines)
     if board.rows != rows or board.cols != cols:
         raise SystemExit(
-            f"plansza ze stdin ma rozmiar {board.rows}×{board.cols}, "
-            f"a podano --rows {rows} --cols {cols}."
+            f"board from stdin is {board.rows}x{board.cols}, "
+            f"but --rows {rows} --cols {cols} were given."
         )
     return board
 
@@ -155,9 +155,9 @@ def print_board(board: Board) -> None:
 def main() -> None:
     args = parse_args()
     if args.rows < 2:
-        raise SystemExit("argument --rows: musi być >= 2")
+        raise SystemExit("argument --rows: must be >= 2")
     if args.cols < 1:
-        raise SystemExit("argument --cols: musi być >= 1")
+        raise SystemExit("argument --cols: must be >= 1")
 
     random.seed(args.seed)
     if args.board_from_stdin:
@@ -237,9 +237,9 @@ def main() -> None:
 
     logger.log_end(rounds=rounds, winner_name=winner.name if winner else None)
     print_board(board)
-    print(f"Rundy: {rounds}, zwyciezca: {winner.name if winner else 'brak'}")
+    print(f"Rounds: {rounds}, winner: {winner.name if winner else 'none'}")
     print(
-        f"odwiedzone_wezly={total_visited_nodes} czas_s={total_time:.6f}",
+        f"visited_nodes={total_visited_nodes} time_s={total_time:.6f}",
         file=sys.stderr,
     )
 
