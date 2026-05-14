@@ -11,7 +11,6 @@ TEST_COLS = 8
 
 
 def random_board(seed: int, n_pieces_each: int = 5) -> Board:
-    """Deterministic random mid-game position avoiding goal rows."""
     rng = random.Random(seed)
     grid: List[List[str]] = [["_"] * TEST_COLS for _ in range(TEST_ROWS)]
     inner_cells = [
@@ -62,10 +61,6 @@ def mate_in_one_board_for_white() -> Board:
 
 
 def capture_or_lose_board() -> Board:
-    """It is B's turn. W is one move from winning (W at row 1 reaches row 0
-    next ply). B has two pieces sitting at row 0 that can capture W
-    diagonally. Not capturing means W reaches its goal row and B loses.
-    """
     lines = [
         "_ _ B _ B _ _ _",
         "_ _ _ W _ _ _ _",
