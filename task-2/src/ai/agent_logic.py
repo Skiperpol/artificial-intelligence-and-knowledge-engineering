@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import random
 
 from ai.heuristics import material_heuristic

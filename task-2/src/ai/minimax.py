@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 from math import inf
 from time import perf_counter
@@ -8,6 +6,8 @@ from typing import Callable, Dict, List, Optional
 from engine.board import Board, Move
 from players.players import Player, get_opponent
 from ai.heuristics import HEURISTICS
+
+Heuristic = Callable[[Board, Player], float]
 
 
 @dataclass

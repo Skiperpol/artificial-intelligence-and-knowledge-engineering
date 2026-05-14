@@ -1,6 +1,4 @@
 
-from __future__ import annotations
-
 from engine.board import Board, Move
 from players.players import Player
 
