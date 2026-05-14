@@ -2,7 +2,7 @@ import random
 
 from ai.heuristics import material_heuristic
 from ai.minimax import choose_best_move
-from engine.board import BOARD_SIZE, Board, Move
+from engine.board import Board, Move
 from players.players import Player
 
 
@@ -41,16 +41,17 @@ def choose_epsilon_for_player(player: Player, p1_epsilon: float, p2_epsilon: flo
 
 def _distance_to_goal(board: Board, player: Player) -> int:
     pieces_rows = []
-    for row in range(BOARD_SIZE):
-        for col in range(BOARD_SIZE):
+    for row in range(board.rows):
+        for col in range(board.cols):
             if board.grid[row][col] == player.symbol:
                 pieces_rows.append(row)
     if not pieces_rows:
-        return BOARD_SIZE
+        return board.rows
+    last = board.rows - 1
     if player.symbol == "B":
         distances = []
         for row in pieces_rows:
-            dist = (BOARD_SIZE - 1) - row
+            dist = last - row
             distances.append(dist)
 
         return min(distances)

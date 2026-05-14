@@ -3,7 +3,11 @@ from typing import List, Sequence
 from players.players import Player
 
 
-BOARD_SIZE = 8
+DEFAULT_ROWS = 8
+DEFAULT_COLS = 8
+# Zachowane dla testów i kodu zakładającego planszę 8×8.
+BOARD_SIZE = DEFAULT_ROWS
+
 EMPTY = "_"
 LAST_MOVE_FROM = "o"
 
@@ -16,11 +20,19 @@ class Move:
     to_col: int
     is_capture: bool
 
+
 class Board:
     # [Punkt 1] Poprawne zdefiniowanie stanu gry.
-    def __init__(self, grid: Sequence[Sequence[str]] | None = None) -> None:
+    def __init__(
+        self,
+        grid: Sequence[Sequence[str]] | None = None,
+        rows: int | None = None,
+        cols: int | None = None,
+    ) -> None:
         if grid is None:
-            self.grid = self._default_start_position()
+            r = DEFAULT_ROWS if rows is None else rows
+            c = DEFAULT_COLS if cols is None else cols
+            self.grid = self._default_start_position(r, c)
         else:
             self.grid = []
             for row in grid:
@@ -28,34 +40,46 @@ class Board:
                 self.grid.append(new_row)
             self._validate_grid()
 
+    @property
+    def rows(self) -> int:
+        return len(self.grid)
+
+    @property
+    def cols(self) -> int:
+        return len(self.grid[0]) if self.grid else 0
+
     @staticmethod
-    def _default_start_position() -> List[List[str]]:
-        grid = []
+    def _default_start_position(rows: int, cols: int) -> List[List[str]]:
+        if rows < 2:
+            raise ValueError("Plansza musi mieć co najmniej 2 wiersze.")
+        if cols < 1:
+            raise ValueError("Plansza musi mieć co najmniej 1 kolumnę.")
 
-        for _ in range(BOARD_SIZE):
-            row = [EMPTY] * BOARD_SIZE
-            grid.append(row)
-
-        for row in (0, 1):
-            for col in range(BOARD_SIZE):
-                grid[row][col] = "B"
-        for row in (BOARD_SIZE - 2, BOARD_SIZE - 1):
-            for col in range(BOARD_SIZE):
-                grid[row][col] = "W"
+        grid: List[List[str]] = [[EMPTY] * cols for _ in range(rows)]
+        setup_depth = min(2, rows // 2)
+        for r in range(setup_depth):
+            for c in range(cols):
+                grid[r][c] = "B"
+        for r in range(rows - setup_depth, rows):
+            for c in range(cols):
+                grid[r][c] = "W"
         return grid
 
     def _validate_grid(self) -> None:
-        if len(self.grid) != BOARD_SIZE:
-            raise ValueError("Board must have exactly " + str(BOARD_SIZE) + " rows.")
+        if self.rows < 2:
+            raise ValueError("Plansza musi mieć co najmniej 2 wiersze.")
+        w = len(self.grid[0])
+        if w < 1:
+            raise ValueError("Plansza musi mieć co najmniej 1 kolumnę.")
         for row in self.grid:
-            if len(row) != BOARD_SIZE:
-                raise ValueError("Each row must have exactly " + str(BOARD_SIZE) + " columns.")
+            if len(row) != w:
+                raise ValueError("Wszystkie wiersze muszą mieć tę samą liczbę kolumn.")
             for cell in row:
                 if cell not in {"B", "W", EMPTY, LAST_MOVE_FROM}:
                     raise ValueError(f"Invalid board token: {cell}")
 
     def _in_bounds(self, row: int, col: int) -> bool:
-        return 0 <= row < BOARD_SIZE and 0 <= col < BOARD_SIZE
+        return 0 <= row < self.rows and 0 <= col < self.cols
 
     @staticmethod
     def _is_empty(cell: str) -> bool:
@@ -64,13 +88,13 @@ class Board:
     def get_legal_moves(self, player: Player) -> List[Move]:
         # [Punkt 1] Funkcja generująca możliwe ruchy dla danego stanu i gracza.
         moves: List[Move] = []
-        for row in range(BOARD_SIZE):
-            for col in range(BOARD_SIZE):
+        for row in range(self.rows):
+            for col in range(self.cols):
                 if self.grid[row][col] != player.symbol:
                     continue
 
                 next_row = row + player.direction
-                if not (0 <= next_row < BOARD_SIZE):
+                if not (0 <= next_row < self.rows):
                     continue
 
                 if self._is_empty(self.grid[next_row][col]):
@@ -90,8 +114,8 @@ class Board:
         return moves
 
     def _clear_last_move_marker(self) -> None:
-        for row in range(BOARD_SIZE):
-            for col in range(BOARD_SIZE):
+        for row in range(self.rows):
+            for col in range(self.cols):
                 if self.grid[row][col] == LAST_MOVE_FROM:
                     self.grid[row][col] = EMPTY
 
@@ -105,32 +129,39 @@ class Board:
 
     def has_player_won(self, player: Player) -> bool:
         meta_player = self.grid[player.goal_row]
-        
+
         for cell in meta_player:
             if cell == player.symbol:
                 return True
-                
-        return False      
+
+        return False
 
     def to_lines(self) -> List[str]:
         result = []
-        
+
         for row in self.grid:
             joined_row = " ".join(row)
             result.append(joined_row)
-            
+
         return result
 
     @classmethod
     def from_lines(cls, lines: Sequence[str]) -> "Board":
-        if len(lines) != BOARD_SIZE:
-            raise ValueError(f"Board must have exactly {BOARD_SIZE} lines.")
+        stripped = [line.rstrip("\n\r") for line in lines]
+        if not stripped:
+            raise ValueError("Brak linii opisujących planszę.")
 
-        grid_data = []
-        for line in lines:
+        grid_data: List[List[str]] = []
+        expected_width: int | None = None
+        for line in stripped:
             cells = line.split()
-            if len(cells) != BOARD_SIZE:
-                raise ValueError(f"Each board row must have exactly {BOARD_SIZE} cells.")
+            if expected_width is None:
+                expected_width = len(cells)
+            elif len(cells) != expected_width:
+                raise ValueError(
+                    f"Każdy wiersz musi mieć tę samą liczbę pól (oczekiwano {expected_width}, "
+                    f"dostano {len(cells)})."
+                )
             grid_data.append(cells)
 
         return cls(grid_data)

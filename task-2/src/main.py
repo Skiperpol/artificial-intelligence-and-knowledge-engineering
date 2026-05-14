@@ -11,16 +11,30 @@ from ai.agent_logic import (
     choose_heuristic_for_player,
     choose_move_for_agent,
 )
-from ai.minimax import HEURISTICS, get_opponent
-from engine.board import BOARD_SIZE, Board
+from ai.minimax import HEURISTICS
+from engine.board import Board
 from engine.game_logger import GameLogger
-from players.players import FirstPlayer, Player, SecondPlayer
+from players.players import FirstPlayer, Player, SecondPlayer, get_opponent
 
 # python3 main.py --agent-p1 minimax --agent-p2 minimax --heuristic-p1 advancement --heuristic-p2 advancement --depth 3
 # python3 main.py --agent-p1 minimax --agent-p2 epsilon-greedy --depth-p1 4 --depth-p2 2 --adaptive-strategy --epsilon-p2 0.2
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Breakthrough Minimax")
+    parser.add_argument(
+        "--rows",
+        type=int,
+        default=8,
+        metavar="R",
+        help="Liczba wierszy planszy (domyślnie 8). Musi być >= 2.",
+    )
+    parser.add_argument(
+        "--cols",
+        type=int,
+        default=8,
+        metavar="C",
+        help="Liczba kolumn planszy (domyślnie 8). Musi być >= 1.",
+    )
     parser.add_argument(
         "--depth",
         type=int,
@@ -106,24 +120,31 @@ def parse_args() -> argparse.Namespace:
         "--board-from-stdin",
         action="store_true",
         help=(
-            f"Read the starting board as exactly {BOARD_SIZE} lines from stdin "
-            "(space-separated B W _ o per line). Heuristic and depth stay on the CLI."
+            "Wczytaj startową planszę ze stdin: dokładnie --rows linii, "
+            "w każdej --cols pól oddzielonych spacjami (B W _ o). "
+            "Wymiary muszą zgadzać się z --rows i --cols."
         ),
     )
     return parser.parse_args()
 
 
-def read_board_from_stdin() -> Board:
+def read_board_from_stdin(rows: int, cols: int) -> Board:
     lines: list[str] = []
-    for _ in range(BOARD_SIZE):
+    for _ in range(rows):
         line = sys.stdin.readline()
         if line == "":
             raise SystemExit(
-                f"stdin ended before {BOARD_SIZE} board lines "
-                "(expected full board, space-separated tokens per line)."
+                f"stdin skończył się przed {rows} liniami planszy "
+                "(oczekiwano pełnej siatki: --rows linii, w każdej --cols pól)."
             )
         lines.append(line.rstrip("\n\r"))
-    return Board.from_lines(lines)
+    board = Board.from_lines(lines)
+    if board.rows != rows or board.cols != cols:
+        raise SystemExit(
+            f"plansza ze stdin ma rozmiar {board.rows}×{board.cols}, "
+            f"a podano --rows {rows} --cols {cols}."
+        )
+    return board
 
 
 def print_board(board: Board) -> None:
@@ -133,16 +154,24 @@ def print_board(board: Board) -> None:
 
 def main() -> None:
     args = parse_args()
+    if args.rows < 2:
+        raise SystemExit("argument --rows: musi być >= 2")
+    if args.cols < 1:
+        raise SystemExit("argument --cols: musi być >= 1")
+
     random.seed(args.seed)
-    board = read_board_from_stdin() if args.board_from_stdin else Board()
+    if args.board_from_stdin:
+        board = read_board_from_stdin(args.rows, args.cols)
+    else:
+        board = Board(rows=args.rows, cols=args.cols)
     logs_dir = Path(__file__).resolve().parents[1] / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
     log_path = logs_dir / Path(args.log_file).name
     logger = GameLogger(str(log_path))
     logger.log_initial_board(board)
 
-    player_1 = FirstPlayer()
-    player_2 = SecondPlayer()
+    player_1 = FirstPlayer(board.rows)
+    player_2 = SecondPlayer(board.rows)
     current_player: Player = player_1
     rounds = 0
     total_visited_nodes = 0
