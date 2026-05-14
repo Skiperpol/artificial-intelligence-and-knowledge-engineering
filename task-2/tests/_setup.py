@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 
+# Importowanie kodu z innego folderu
 _SRC = Path(__file__).resolve().parent.parent / "src"
 _src_str = str(_SRC)
 if _src_str not in sys.path:
