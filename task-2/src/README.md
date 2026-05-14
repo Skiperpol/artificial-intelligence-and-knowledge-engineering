@@ -4,6 +4,8 @@
 
 **Zakres.** Implementacja gry planszowej Breakthrough z ograniczonym przeszukiwaniem Minimax, heurystykami, cięciami alfa–beta oraz trzema typami agentów w CLI (`minimax`, `random`, `epsilon-greedy`).
 
+## Dawid Błaszczyk
+
 ---
 
 ## Spis treści
@@ -410,6 +412,35 @@ python3 main.py --agent-p1 minimax --agent-p2 epsilon-greedy --depth-p1 4 --dept
 python3 main.py --no-alpha-beta
 python3 main.py --board-from-stdin --depth 3
 python3 main.py --rows 6 --cols 10 --depth 2
+```
+
+### Wersja podstawowa (Minimax vs optymalny przeciwnik, ta sama heurystyka)
+
+Rozegranie całej partii tak, by **gracz 1 (B) i gracz 2 (W) byli agentami `minimax`**, używali **tej samej** heurystyki i **tej samej** głębokości — wtedy model „przeciwnik gra optymalnie według tej samej funkcji oceny” jest spójny z faktycznym ruchem W.
+
+Z katalogu `task-2/src/`:
+
+```bash
+python3 main.py --depth 3
+```
+
+To odpowiada jawnemu zapisowi (domyślne agenty to i tak `minimax`, domyślna heurystyka to `advancement` dla obu stron):
+
+```bash
+python3 main.py --agent-p1 minimax --agent-p2 minimax --heuristic-p1 advancement --heuristic-p2 advancement --depth 3
+```
+
+### Wersja rozszerzona (dwaj odrębni agenci, strategia może się różnić)
+
+**Różne** `--agent-p1` / `--agent-p2` i/lub różne głębokości, heurystyki lub `--adaptive-strategy`.
+
+Przykłady z `task-2/src/`:
+
+```bash
+python3 main.py --agent-p1 minimax --agent-p2 epsilon-greedy --depth-p1 4 --depth-p2 2 --epsilon-p2 0.2
+python3 main.py --agent-p1 minimax --agent-p2 random --depth-p1 3
+python3 main.py --agent-p1 minimax --agent-p2 minimax --heuristic-p1 advancement --heuristic-p2 material --depth-p1 4 --depth-p2 3
+python3 main.py --agent-p1 minimax --agent-p2 minimax --depth 3 --adaptive-strategy
 ```
 
 Pełna lista flag: `python main.py --help`.
