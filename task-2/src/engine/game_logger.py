@@ -1,4 +1,3 @@
-
 from engine.board import Board, Move
 from players.players import Player
 
