@@ -3,18 +3,21 @@ from typing import List
 
 from _setup import Runner
 
-from engine.board import BOARD_SIZE, Board
+from engine.board import Board
 from players.players import FirstPlayer, Player, SecondPlayer
+
+TEST_ROWS = 8
+TEST_COLS = 8
 
 
 def random_board(seed: int, n_pieces_each: int = 5) -> Board:
     """Deterministic random mid-game position avoiding goal rows."""
     rng = random.Random(seed)
-    grid: List[List[str]] = [["_"] * BOARD_SIZE for _ in range(BOARD_SIZE)]
+    grid: List[List[str]] = [["_"] * TEST_COLS for _ in range(TEST_ROWS)]
     inner_cells = [
         (r, c)
-        for r in range(1, BOARD_SIZE - 1)
-        for c in range(BOARD_SIZE)
+        for r in range(1, TEST_ROWS - 1)
+        for c in range(TEST_COLS)
     ]
     rng.shuffle(inner_cells)
 

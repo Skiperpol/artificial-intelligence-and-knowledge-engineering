@@ -5,8 +5,6 @@ from players.players import Player
 
 DEFAULT_ROWS = 8
 DEFAULT_COLS = 8
-# Zachowane dla testów i kodu zakładającego planszę 8×8.
-BOARD_SIZE = DEFAULT_ROWS
 
 EMPTY = "_"
 LAST_MOVE_FROM = "o"
