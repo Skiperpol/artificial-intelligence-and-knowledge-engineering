@@ -1,3 +1,5 @@
+<div align="center">
+
 # Raport laboratoryjny
 
 ## Gra Breakthrough — Minimax i cięcia alfa–beta
@@ -5,6 +7,8 @@
 **Zakres.** Implementacja gry planszowej Breakthrough z ograniczonym przeszukiwaniem Minimax, heurystykami, cięciami alfa–beta oraz trzema typami agentów w CLI (`minimax`, `random`, `epsilon-greedy`).
 
 ## Dawid Błaszczyk
+
+</div>
 
 ---
 
