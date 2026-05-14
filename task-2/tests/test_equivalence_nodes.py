@@ -1,5 +1,5 @@
 # [TEST]: Test sprawdza, czy algorytm alfa-beta faktycznie odwiedza mniej węzłów niż 
-#         Minimax i czy realnie „odcina” zbędne gałęzie.
+#         Minimax i czy realnie odcina zbędne gałęzie.
 
 import time
 
