@@ -2,7 +2,7 @@
 
 ## Gra Breakthrough — Minimax i cięcia alfa–beta
 
-**Zakres.** Implementacja gry planszowej Breakthrough z ograniczonym przeszukiwaniem Minimax, heurystykami, cięciami alfa–beta oraz rozszerzeniem z dwoma typami agentów.
+**Zakres.** Implementacja gry planszowej Breakthrough z ograniczonym przeszukiwaniem Minimax, heurystykami, cięciami alfa–beta oraz trzema typami agentów w CLI (`minimax`, `random`, `epsilon-greedy`).
 
 ---
 
@@ -16,7 +16,8 @@
 6. [Testy automatyczne](#testy)  
 7. [Wnioski z partii AI kontra AI](#wnioski)  
 8. [Biblioteki](#biblioteki)  
-9. [Uruchomienie](#uruchomienie)
+9. [Uruchomienie](#uruchomienie)  
+10. [Przykładowa rozegrana partia](#progresja-log)
 
 ---
 
@@ -59,9 +60,9 @@ Gdy dalsza analiza ścieżki nie poprawi wyniku, następuje **odcięcie** — os
 
 Stan opisujemy jako:
 
-- **Plansza** — siatka $8 \times 8$; pola: pion gracza pierwszego (B), drugiego (W), puste (`_`), pole startu ostatniego ruchu (`o`).  
+- **Plansza** — prostokątna siatka; domyślnie $8 \times 8$, rozmiar ustawia się w CLI (`--rows`, `--cols`). Pola: pion gracza pierwszego (B), drugiego (W), puste (`_`), pole startu ostatniego ruchu (`o`).  
 - **Tura** — który gracz ma ruch.  
-- **Start** — po dwa skrajne rzędy pionów każdej strony.  
+- **Start** — z `_default_start_position()`: głębokość obozu `min(2, rows // 2)` rzędów od każdej krawędzi (dla klasycznego $8\times 8$ to dwa rzędy B u góry i dwa W u dołu).  
 - **Koniec gry**  
   - *Dotarcie do mety* — pion w ostatnim rzędzie po stronie przeciwnika.  
   - *Blokada* — przeciwnik nie ma żadnego legalnego ruchu (w tym brak pionów).
@@ -108,24 +109,14 @@ Plansza to `Board.grid`. Start z `_default_start_position()` lub wczytanie `from
 ```python
 # engine/board.py
 
-@dataclass(frozen=True)
-class Move:
-    from_row: int
-    from_col: int
-    to_row: int
-    to_col: int
-    is_capture: bool
-
 class Board:
-    def __init__(self, grid: Sequence[Sequence[str]] | None = None) -> None:
-        if grid is None:
-            self.grid = self._default_start_position()
-        else:
-            self.grid = []
-            for row in grid:
-                new_row = list(row)
-                self.grid.append(new_row)
-            self._validate_grid()
+    def __init__(
+        self,
+        grid: Sequence[Sequence[str]] | None = None,
+        rows: int | None = None,
+        cols: int | None = None,
+    ) -> None:
+        ...
 
     def get_legal_moves(self, player: Player) -> List[Move]:
         ...
@@ -347,6 +338,36 @@ Heurystyki nie widzą całej partii do końca — przy małej głębokości moż
 | `test_brute_force` | Zgodność wyniku z referencyjnym „naiwnym” minimaksem. |
 | `test_argmax` | Wybrany ruch ma najwyższą wartość i zgadza się z raportowanym wynikiem. |
 
+Uruchomienie z katalogu `task-2/`:
+
+```bash
+python3 tests/run_all.py
+```
+
+Przykładowy wynik:
+
+```
+Minimax and alpha-beta return the same root score
+-------------------------------------------------
+
+Alpha-beta visits no more nodes than plain Minimax
+--------------------------------------------------
+
+Alpha-beta strictly prunes at depth 3 on a representative position
+------------------------------------------------------------------
+
+Tactical puzzles: mate-in-1 and capture-or-lose
+-----------------------------------------------
+
+Production score equals independent brute-force Minimax
+-------------------------------------------------------
+
+Reported best move is an argmax over legal children
+---------------------------------------------------
+
+Ran 906 checks in 18.989s: 906 passed, 0 failed
+```
+
 ---
 
 <a id="wnioski"></a>
@@ -384,10 +405,88 @@ Program używa wyłącznie **biblioteki standardowej** Pythona:
 Z katalogu `task-2/src/`:
 
 ```bash
-python main.py --depth 4 --heuristic-p1 advancement --heuristic-p2 mobility
-python main.py --agent-p1 minimax --agent-p2 epsilon-greedy --depth-p1 4 --depth-p2 2 --adaptive-strategy
-python main.py --no-alpha-beta
-python main.py --board-from-stdin --depth 3
+python3 main.py --depth 4 --heuristic-p1 advancement --heuristic-p2 mobility
+python3 main.py --agent-p1 minimax --agent-p2 epsilon-greedy --depth-p1 4 --depth-p2 2 --adaptive-strategy
+python3 main.py --no-alpha-beta
+python3 main.py --board-from-stdin --depth 3
+python3 main.py --rows 6 --cols 10 --depth 2
 ```
 
 Pełna lista flag: `python main.py --help`.
+
+---
+
+<a id="progresja-log"></a>
+
+## 10. Przykładowa rozegrana partia
+
+Poniżej: **pięć** migawkowych plansz wyciętych z pliku logu (`task-2/logs/…`) — widać, jak przesuwają się piony B (gracz 1) i W (gracz 2).
+
+```bash
+python3 main.py --rows 6 --cols 6 --depth 2 --heuristic-p1 advancement --heuristic-p2 advancement --agent-p1 minimax --agent-p2 minimax --seed 0 --max-rounds 120 --log-file readme_maps.txt
+```
+
+### Mapa 1 — plansza startowa
+
+```
+B B B B B B
+B B B B B B
+_ _ _ _ _ _
+_ _ _ _ _ _
+W W W W W W
+W W W W W W
+```
+
+### Mapa 2 — po rundzie 4
+
+```
+_ B B B B B
+B B B B B B
+B _ _ _ _ _
+W _ W _ _ _
+_ o W W W W
+W W W W W W
+```
+
+### Mapa 3 — po rundzie 8
+
+```
+_ _ B B B B
+B B B B B B
+B _ B _ _ _
+W _ W _ W W
+_ _ W _ o W
+W W W W W W
+```
+
+### Mapa 4 — po rundzie 12
+
+```
+_ _ B B B B
+_ B _ B B B
+B W B _ _ _
+_ _ o _ W W
+_ _ W _ _ W
+W W W W W W
+```
+
+### Mapa 5 — po rundzie 16
+
+```
+W _ _ B B B
+o B B B B B
+_ _ B _ _ _
+B _ _ _ W W
+_ _ W _ _ W
+W W W W W W
+```
+
+W ostatniej planszy **W** stoi w **pierwszym rzędzie**, co oznacza, że partia kończy się wygraną W. 
+
+```
+--- GAME END ---
+rounds=16
+winner=Player 2
+visited_nodes=4744
+time_s=0.230197
+```
