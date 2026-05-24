@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import sys
+
+# Limit 1 s od startu kontenera — handshake przed ciężkimi importami.
+print("1 1", flush=True)
+
 from time import perf_counter
 
 from ai.agent_logic import choose_adaptive_heuristic, choose_move_for_agent
@@ -14,18 +18,20 @@ from tournament.protocol import (
     read_line,
 )
 
-
-MOVE_TIME_BUDGET_S = 0.85
+# Turniej: 1 s na ruch; zostawiamy zapas na I/O i jitter (suma spóźnień max 3 s).
+MOVE_TIME_BUDGET_S = 0.92
 MIN_SEARCH_DEPTH = 2
+MIN_TIME_TO_START_SEARCH_S = 0.22
+MAX_SINGLE_SEARCH_S = 0.35
 
 
 def max_search_depth(rows: int, cols: int) -> int:
     area = rows * cols
     if area <= 36:
-        return 6
-    if area <= 49:
         return 5
-    return 4
+    if area <= 49:
+        return 4
+    return 3
 
 
 def parse_game_info(line: str) -> tuple[int, int, int]:
@@ -60,7 +66,7 @@ def ingest_opponent_turn(
 
 
 def choose_heuristic(board: Board, player: Player) -> str:
-    return choose_adaptive_heuristic(board, player, "advancement")
+    return choose_adaptive_heuristic(board, player, "breakthrough")
 
 
 def play_turn(board: Board, player: Player, rows: int) -> None:
@@ -70,14 +76,14 @@ def play_turn(board: Board, player: Player, rows: int) -> None:
 
     deadline = perf_counter() + MOVE_TIME_BUDGET_S
     chosen = legal_moves[0]
-    emit_move(chosen, rows)
-
     depth = MIN_SEARCH_DEPTH
     depth_limit = max_search_depth(rows, board.cols)
-    while depth <= depth_limit and perf_counter() < deadline:
-        if deadline - perf_counter() < 0.12:
+    while depth <= depth_limit:
+        remaining = deadline - perf_counter()
+        if remaining < MIN_TIME_TO_START_SEARCH_S:
             break
         heuristic_name = choose_heuristic(board, player)
+        search_start = perf_counter()
         move, _visited, elapsed = choose_move_for_agent(
             board=board,
             player=player,
@@ -87,19 +93,26 @@ def play_turn(board: Board, player: Player, rows: int) -> None:
             use_alpha_beta=True,
             epsilon=0.0,
         )
+        elapsed = perf_counter() - search_start
         if move is not None:
             chosen = move
-            emit_move(chosen, rows)
-        if elapsed > 0.18:
+        if elapsed > MAX_SINGLE_SEARCH_S:
+            break
+        if deadline - perf_counter() < MIN_TIME_TO_START_SEARCH_S:
             break
         depth += 1
 
+    if chosen not in legal_moves:
+        chosen = legal_moves[0]
+
+    try:
+        emit_move(chosen, rows)
+    except BrokenPipeError:
+        raise SystemExit(0) from None
     board.apply_move(chosen, player)
 
 
 def main() -> None:
-    print("1 1", flush=True)
-
     cols, rows, player_id = parse_game_info(read_line())
     me = make_player(player_id, rows)
     opponent = get_opponent(me)
@@ -124,5 +137,5 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         main()
-    except EOFError:
+    except (EOFError, BrokenPipeError):
         sys.exit(0)

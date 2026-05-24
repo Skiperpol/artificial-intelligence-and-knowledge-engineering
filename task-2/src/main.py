@@ -56,13 +56,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--heuristic-p1",
         choices=list(HEURISTICS.keys()),
-        default="advancement",
+        default="breakthrough",
         help="Heuristic for player 1 (B).",
     )
     parser.add_argument(
         "--heuristic-p2",
         choices=list(HEURISTICS.keys()),
-        default="advancement",
+        default="breakthrough",
         help="Heuristic for player 2 (W).",
     )
     parser.add_argument(

@@ -1,6 +1,6 @@
 import random
 
-from ai.heuristics import material_heuristic
+from ai.heuristics import _game_phase, material_heuristic
 from ai.minimax import choose_best_move
 from engine.board import Board, Move
 from players.players import Player
@@ -51,13 +51,21 @@ def _distance_to_goal(board: Board, player: Player) -> int:
 
 
 def choose_adaptive_heuristic(board: Board, player: Player, fallback_heuristic: str) -> str:
-    # [Punkt 5] Adaptacyjne przełączanie strategii zależnie od sytuacji na planszy.
-    if _distance_to_goal(board, player) <= 2:
+    # Złożona funkcja oceny obejmuje fazy debiutu, środka i końcówki.
+    if fallback_heuristic == "breakthrough":
+        return "breakthrough"
+
+    phase = _game_phase(board, player)
+    if phase == "endgame" or _distance_to_goal(board, player) <= 2:
         return "advancement"
-    if material_heuristic(board, player) < 0:
+    if material_heuristic(board, player) < -1:
         return "material"
-    if fallback_heuristic == "advancement":
+    if phase == "opening":
+        return "center_control"
+    if phase == "maneuvering":
         return "mobility"
+    if phase == "attack":
+        return "attack_threats"
 
     return fallback_heuristic
 

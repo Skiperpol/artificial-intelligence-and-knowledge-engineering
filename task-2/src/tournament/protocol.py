@@ -35,14 +35,29 @@ def parse_coordinate_move(line: str) -> Tuple[int, int, int, int]:
 
 
 def tournament_to_internal_move(
-    x0: int, y0: int, x1: int, y1: int, rows: int
+    x0: int,
+    y0: int,
+    x1: int,
+    y1: int,
+    rows: int,
+    board: Board | None = None,
+    player_symbol: str | None = None,
 ) -> Move:
+    from_row = rows - 1 - y0
+    to_row = rows - 1 - y1
+    is_capture = False
+    if board is not None and player_symbol is not None:
+        if board._in_bounds(to_row, x1):
+            destination = board.grid[to_row][x1]
+            is_capture = destination == (
+                "W" if player_symbol == "B" else "B"
+            )
     return Move(
-        from_row=rows - 1 - y0,
+        from_row=from_row,
         from_col=x0,
-        to_row=rows - 1 - y1,
+        to_row=to_row,
         to_col=x1,
-        is_capture=False,
+        is_capture=is_capture,
     )
 
 
@@ -60,7 +75,9 @@ def apply_tournament_move(board: Board, line: str, rows: int, player_symbol: str
     from players.players import Player, TournamentBlack, TournamentWhite
 
     x0, y0, x1, y1 = parse_coordinate_move(line)
-    move = tournament_to_internal_move(x0, y0, x1, y1, rows)
+    move = tournament_to_internal_move(
+        x0, y0, x1, y1, rows, board=board, player_symbol=player_symbol
+    )
     if player_symbol == "B":
         mover: Player = TournamentWhite(rows)
     else:
