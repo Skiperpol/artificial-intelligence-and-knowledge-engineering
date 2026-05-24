@@ -19,28 +19,24 @@ def material_heuristic(board: Board, perspective: Player) -> float:
     return float(my_count - opp_count)
 
 
+def _advancement_for_row(row: int, board_rows: int, goal_row: int) -> int:
+    last_row = board_rows - 1
+    if goal_row == last_row:
+        return row
+    return last_row - row
+
+
 def advancement_heuristic(board: Board, perspective: Player) -> float:
     # [Punkt 2] Strategia 2: jak daleko piony są przesunięte w stronę mety.
-    last_row = board.rows - 1
     my_total_advancement = 0
     opp_total_advancement = 0
+    opponent = get_opponent(perspective)
 
-    for row, col in _piece_positions(board, perspective.symbol):
-        if perspective.symbol == "B":
-            dist_from_start = row
-        else:
-            dist_from_start = last_row - row
+    for row, _col in _piece_positions(board, perspective.symbol):
+        my_total_advancement += _advancement_for_row(row, board.rows, perspective.goal_row)
 
-        my_total_advancement += dist_from_start
-
-    opponent_symbol = perspective.opponent_symbol()
-    for row, col in _piece_positions(board, opponent_symbol):
-        if perspective.symbol == "B":
-            opp_dist_from_start = last_row - row
-        else:
-            opp_dist_from_start = row
-
-        opp_total_advancement += opp_dist_from_start
+    for row, _col in _piece_positions(board, opponent.symbol):
+        opp_total_advancement += _advancement_for_row(row, board.rows, opponent.goal_row)
 
     return float(my_total_advancement - opp_total_advancement)
 

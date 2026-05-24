@@ -47,15 +47,7 @@ def _distance_to_goal(board: Board, player: Player) -> int:
                 pieces_rows.append(row)
     if not pieces_rows:
         return board.rows
-    last = board.rows - 1
-    if player.symbol == "B":
-        distances = []
-        for row in pieces_rows:
-            dist = last - row
-            distances.append(dist)
-
-        return min(distances)
-    return min(pieces_rows)
+    return min(abs(row - player.goal_row) for row in pieces_rows)
 
 
 def choose_adaptive_heuristic(board: Board, player: Player, fallback_heuristic: str) -> str:

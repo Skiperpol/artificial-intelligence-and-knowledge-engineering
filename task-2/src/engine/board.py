@@ -63,6 +63,43 @@ class Board:
                 grid[r][c] = "W"
         return grid
 
+    @staticmethod
+    def _tournament_start_position(rows: int, cols: int) -> List[List[str]]:
+        """W (black) on top rows, B (white) on bottom — tournament wire format."""
+        if rows < 2:
+            raise ValueError("Board must have at least 2 rows.")
+        if cols < 1:
+            raise ValueError("Board must have at least 1 column.")
+
+        grid: List[List[str]] = [[EMPTY] * cols for _ in range(rows)]
+        setup_depth = min(2, rows // 2)
+        for r in range(setup_depth):
+            for c in range(cols):
+                grid[r][c] = "W"
+        for r in range(rows - setup_depth, rows):
+            for c in range(cols):
+                grid[r][c] = "B"
+        return grid
+
+    @classmethod
+    def tournament_default(cls, rows: int, cols: int) -> "Board":
+        return cls(grid=cls._tournament_start_position(rows, cols))
+
+    @classmethod
+    def from_tournament_flat(cls, line: str, cols: int, rows: int) -> "Board":
+        tokens = line.split()
+        expected = cols * rows
+        if len(tokens) != expected:
+            raise ValueError(
+                f"Tournament board has {len(tokens)} cells, expected {expected}."
+            )
+        grid: List[List[str]] = []
+        index = 0
+        for _ in range(rows):
+            grid.append(tokens[index : index + cols])
+            index += cols
+        return cls(grid)
+
     def _validate_grid(self) -> None:
         if self.rows < 2:
             raise ValueError("Board must have at least 2 rows.")
@@ -125,10 +162,20 @@ class Board:
         self.grid[move.from_row][move.from_col] = LAST_MOVE_FROM
         self.grid[move.to_row][move.to_col] = player.symbol
 
-    def has_player_won(self, player: Player) -> bool:
-        meta_player = self.grid[player.goal_row]
+    def count_pieces(self, symbol: str) -> int:
+        total = 0
+        for row in self.grid:
+            for cell in row:
+                if cell == symbol:
+                    total += 1
+        return total
 
-        for cell in meta_player:
+    def has_player_won(self, player: Player) -> bool:
+        if self.count_pieces(player.opponent_symbol()) == 0:
+            return True
+
+        goal_row = self.grid[player.goal_row]
+        for cell in goal_row:
             if cell == player.symbol:
                 return True
 
