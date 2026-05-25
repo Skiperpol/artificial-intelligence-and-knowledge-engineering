@@ -108,7 +108,7 @@ def choose_tournament_move(
         if block_move is not None:
             return out(block_move)
 
-    if tactical_layers and _seconds_left(deadline) > 0.18:
+    if tactical_layers and _seconds_left(deadline) > 0.20:
         if opponent_has_clear_lane_to_goal(board, player) or quick_diagonal_highway_risk(
             board, player
         ):
@@ -116,15 +116,17 @@ def choose_tournament_move(
             if lane_block is not None:
                 return out(lane_block)
 
-    gift_cap = find_stop_free_gift_capture(board, player)
-    if gift_cap is not None:
-        return out(gift_cap)
+    if _seconds_left(deadline) > 0.08:
+        gift_cap = find_stop_free_gift_capture(board, player)
+        if gift_cap is not None:
+            return out(gift_cap)
 
-    threat_cap = find_preemptive_threat_capture(board, player)
-    if threat_cap is not None:
-        return out(threat_cap)
+    if _seconds_left(deadline) > 0.08:
+        threat_cap = find_preemptive_threat_capture(board, player)
+        if threat_cap is not None:
+            return out(threat_cap)
 
-    if tactical_layers and _seconds_left(deadline) > 0.24:
+    if tactical_layers and _seconds_left(deadline) > 0.26:
         flank_defense = find_defend_flank_move(board, player)
         if flank_defense is not None:
             return out(flank_defense)

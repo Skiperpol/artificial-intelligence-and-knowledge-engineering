@@ -22,8 +22,8 @@ from tournament.protocol import (
 )
 
 # Turniej: t_move=1.0 s — budżet wewnętrzny + twardy limit w play_turn.
-MOVE_TIME_BUDGET_S = 0.58
-MAX_SEARCH_DEPTH = 6
+MOVE_TIME_BUDGET_S = 0.50
+MAX_SEARCH_DEPTH = 4
 HARD_TURN_LIMIT_S = 0.92
 
 
@@ -80,6 +80,10 @@ def play_turn(board: Board, player: Player, rows: int, genome: BotGenome | None)
                 heuristic_name="breakthrough",
                 use_mcts=False,
             )
+    except Exception as exc:
+        # Turniej wymaga ruchu tekstowego; przy błędzie oddaj bezpieczny fallback.
+        print(f"tournament_move_error: {exc}", file=sys.stderr, flush=True)
+        move = None
     finally:
         if token is not None:
             reset_active_genome(token)
