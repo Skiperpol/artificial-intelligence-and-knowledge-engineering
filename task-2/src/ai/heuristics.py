@@ -62,7 +62,9 @@ def _game_phase(board: Board, perspective: Player) -> GamePhase:
 
 
 def _phase_weights(phase: GamePhase) -> Dict[str, float]:
-    weights = dict(EVAL_WEIGHTS)
+    from ai.eval_context import scaled_base_weights
+
+    weights = scaled_base_weights()
     if phase == "opening":
         # Debiut: czyste skrzydła, obsesja na centrum, równy rozwój, bez gróźb (ruchy 1–13).
         weights["center_control"] *= 4.5
@@ -432,9 +434,11 @@ def harmonious_development_heuristic(board: Board, perspective: Player) -> float
 
 
 def wing_vacancy_heuristic(board: Board, perspective: Player) -> float:
-    """Puste tylko skrajne kolumny (0 i ostatnia) — nie opróżniamy 1 i przedostatniej."""
+    """Puste tylko skrajne kolumny; kara za 2+ dziury między pionami na linii tylnej."""
     if board.cols <= 3:
         return 0.0
+    from ai.strategy import count_internal_pawn_gaps_on_row, home_rank_rows
+
     edge = edge_columns(board)
     opponent = get_opponent(perspective)
 
@@ -446,6 +450,12 @@ def wing_vacancy_heuristic(board: Board, perspective: Player) -> float:
         for wing_col in edge:
             if all(board.grid[row][wing_col] != symbol for row in range(board.rows)):
                 penalty -= 2.0
+        for row in home_rank_rows(board, perspective):
+            gaps = count_internal_pawn_gaps_on_row(board, row, symbol)
+            if gaps >= 2:
+                penalty -= 6.0 * gaps
+            elif gaps == 1:
+                penalty -= 1.5
         return penalty
 
     return float(edge_penalty(opponent.symbol) - edge_penalty(perspective.symbol))
@@ -678,8 +688,32 @@ def breakthrough_heuristic(board: Board, perspective: Player) -> float:
     return score
 
 
+# Szybka wersja do self-play — te same genomy (scales), mniej składników na liściu.
+TRAINING_COMPONENTS: tuple[str, ...] = (
+    "advancement",
+    "goal_pressure",
+    "material",
+    "mobility",
+    "safety",
+    "attack_threats",
+    "capture_options",
+    "center_control",
+)
+
+
+def breakthrough_training_heuristic(board: Board, perspective: Player) -> float:
+    from ai.eval_context import scaled_base_weights
+
+    weights = scaled_base_weights()
+    score = 0.0
+    for name in TRAINING_COMPONENTS:
+        fn = HEURISTIC_COMPONENTS[name]
+        score += weights.get(name, EVAL_WEIGHTS[name]) * fn(board, perspective)
+    return score
+
+
 Heuristic = Callable[[Board, Player], float]
-HEURISTICS: Dict[str, Heuristic] = {
+HEURISTIC_COMPONENTS: Dict[str, Heuristic] = {
     "material": material_heuristic,
     "advancement": advancement_heuristic,
     "mobility": mobility_heuristic,
@@ -705,5 +739,10 @@ HEURISTICS: Dict[str, Heuristic] = {
     "flank_guard": flank_guard_heuristic,
     "weak_flank_attack": weak_flank_attack_heuristic,
     "defend_our_flanks": defend_our_flanks_heuristic,
+}
+
+HEURISTICS: Dict[str, Heuristic] = {
+    **HEURISTIC_COMPONENTS,
     "breakthrough": breakthrough_heuristic,
+    "breakthrough-train": breakthrough_training_heuristic,
 }

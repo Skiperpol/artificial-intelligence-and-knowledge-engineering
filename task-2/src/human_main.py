@@ -1,13 +1,20 @@
 import argparse
+import json
 import sys
+from pathlib import Path
 
 from ai.agent_logic import (
     choose_adaptive_heuristic,
     choose_move_for_agent,
 )
+from ai.eval_context import reset_active_genome, set_active_genome
+from ai.genome import BotGenome
 from ai.minimax import HEURISTICS
 from engine.board import Board, Move
 from players.players import Player
+
+TOURNAMENT_TIME_BUDGET_S = 0.92
+TOURNAMENT_MAX_DEPTH = 6
 
 
 def parse_args() -> argparse.Namespace:
@@ -41,8 +48,34 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--heuristic",
         choices=list(HEURISTICS.keys()),
-        default="advancement",
-        help="Bot heuristic (default: advancement).",
+        default="breakthrough",
+        help="Bot heuristic (default: breakthrough).",
+    )
+    parser.add_argument(
+        "--tournament-mode",
+        action="store_true",
+        help=(
+            "Turniejowy silnik: iterative deepening na czas, quiescence, "
+            "filtr taktyczny (jak tournament_main.py)."
+        ),
+    )
+    parser.add_argument(
+        "--time-limit",
+        type=float,
+        default=TOURNAMENT_TIME_BUDGET_S,
+        help=f"Limit czasu bota w trybie turniejowym (default: {TOURNAMENT_TIME_BUDGET_S}).",
+    )
+    parser.add_argument(
+        "--max-depth",
+        type=int,
+        default=TOURNAMENT_MAX_DEPTH,
+        help=f"Maks. głębokość w trybie turniejowym (default: {TOURNAMENT_MAX_DEPTH}).",
+    )
+    parser.add_argument(
+        "--genome",
+        type=str,
+        default=None,
+        help="Opcjonalny plik JSON z wagami (np. z evolve_main.py).",
     )
     parser.add_argument(
         "--no-alpha-beta",
@@ -55,6 +88,15 @@ def parse_args() -> argparse.Namespace:
         help="Let the bot switch heuristics based on board state.",
     )
     return parser.parse_args()
+
+
+def load_genome(path: str | None) -> BotGenome | None:
+    if not path:
+        return None
+    genome_path = Path(path)
+    if not genome_path.is_file():
+        raise SystemExit(f"Genome file not found: {genome_path}")
+    return BotGenome.from_dict(json.loads(genome_path.read_text(encoding="utf-8")))
 
 
 def make_players(rows: int, human_side: str) -> tuple[Player, Player]:
@@ -149,22 +191,42 @@ def play_turn(
     heuristic: str,
     use_alpha_beta: bool,
     adaptive: bool,
+    tournament_mode: bool,
+    time_limit_s: float,
+    max_depth: int,
+    genome: BotGenome | None,
 ) -> None:
     heuristic_name = (
         choose_adaptive_heuristic(board, player, heuristic)
-        if adaptive
+        if adaptive and not tournament_mode
         else heuristic
     )
-    print(f"{player.name} thinking (heuristic={heuristic_name}, depth={depth})...")
-    move, visited_nodes, elapsed = choose_move_for_agent(
-        board=board,
-        player=player,
-        agent_type="minimax",
-        depth=depth,
-        heuristic_name=heuristic_name,
-        use_alpha_beta=use_alpha_beta,
-        epsilon=0.0,
-    )
+    if tournament_mode:
+        mode_label = (
+            f"tournament timed={time_limit_s:.2f}s max_depth={max_depth} "
+            f"quiescence+filter"
+        )
+    else:
+        mode_label = f"depth={depth}"
+    print(f"{player.name} thinking ({mode_label}, heuristic={heuristic_name})...")
+
+    token = set_active_genome(genome) if genome else None
+    try:
+        move, visited_nodes, elapsed = choose_move_for_agent(
+            board=board,
+            player=player,
+            agent_type="minimax",
+            depth=depth,
+            heuristic_name=heuristic_name,
+            use_alpha_beta=use_alpha_beta,
+            epsilon=0.0,
+            time_limit_s=time_limit_s if tournament_mode else None,
+            max_depth=max_depth if tournament_mode else None,
+            tournament_mode=tournament_mode,
+        )
+    finally:
+        if token is not None:
+            reset_active_genome(token)
     if move is None:
         return
     board.apply_move(move, player)
@@ -184,11 +246,21 @@ def main() -> None:
 
     board = Board(rows=args.rows, cols=args.cols)
     human, bot = make_players(board.rows, args.human_side)
+    genome = load_genome(args.genome)
     current: Player = human
     rounds = 0
 
     print("Breakthrough — human vs bot")
     print(f"You play as {human.symbol} ({human.name}), bot plays as {bot.symbol}.")
+    if args.tournament_mode:
+        print(
+            "Bot: tournament mode "
+            f"(time_limit={args.time_limit}s, max_depth={args.max_depth})."
+        )
+    else:
+        print(f"Bot: classic mode (fixed depth={args.depth}).")
+    if genome is not None:
+        print(f"Bot genome: id={genome.genome_id}, depth={genome.depth}")
     print("Rows and columns are numbered from 0. Enter a move number or four coordinates.")
     print()
 
@@ -220,6 +292,10 @@ def main() -> None:
                 heuristic=args.heuristic,
                 use_alpha_beta=not args.no_alpha_beta,
                 adaptive=args.adaptive_strategy,
+                tournament_mode=args.tournament_mode,
+                time_limit_s=args.time_limit,
+                max_depth=args.max_depth,
+                genome=genome,
             )
 
         rounds += 1

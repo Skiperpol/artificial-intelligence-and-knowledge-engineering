@@ -1,7 +1,8 @@
 import random
 
 from ai.heuristics import _game_phase, material_heuristic
-from ai.minimax import choose_best_move
+from ai.minimax import choose_best_move, choose_best_move_timed
+from ai.tournament_search import choose_tournament_move
 from engine.board import Board, Move
 from players.players import Player
 
@@ -78,6 +79,9 @@ def choose_move_for_agent(
     heuristic_name: str,
     use_alpha_beta: bool,
     epsilon: float,
+    time_limit_s: float | None = None,
+    max_depth: int | None = None,
+    tournament_mode: bool = False,
 ) -> tuple[Move | None, int, float]:
     legal_moves = board.get_legal_moves(player)
     if not legal_moves:
@@ -89,11 +93,39 @@ def choose_move_for_agent(
     if agent_type == "epsilon-greedy" and random.random() < epsilon:
         return random.choice(legal_moves), 1, 0.0
 
-    search = choose_best_move(
-        board=board,
-        player=player,
-        depth=depth,
-        heuristic_name=heuristic_name,
-        use_alpha_beta=use_alpha_beta,
-    )
+    if tournament_mode and time_limit_s is not None:
+        move, visited, elapsed = choose_tournament_move(
+            board,
+            player,
+            time_limit_s=time_limit_s,
+            max_depth=max_depth if max_depth is not None else depth,
+            heuristic_name=heuristic_name,
+        )
+        return move, visited, elapsed
+
+    use_quiescence = tournament_mode
+    use_tactical_filter = tournament_mode
+
+    if time_limit_s is not None:
+        search = choose_best_move_timed(
+            board=board,
+            player=player,
+            heuristic_name=heuristic_name,
+            time_limit_s=time_limit_s,
+            max_depth=max_depth if max_depth is not None else depth,
+            min_depth=min(2, depth),
+            use_alpha_beta=use_alpha_beta,
+            use_quiescence=use_quiescence,
+            use_tactical_filter=use_tactical_filter,
+        )
+    else:
+        search = choose_best_move(
+            board=board,
+            player=player,
+            depth=depth,
+            heuristic_name=heuristic_name,
+            use_alpha_beta=use_alpha_beta,
+            use_quiescence=use_quiescence,
+            use_tactical_filter=use_tactical_filter,
+        )
     return search.best_move, search.visited_nodes, search.elapsed_seconds

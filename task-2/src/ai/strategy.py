@@ -60,6 +60,63 @@ def _setup_depth(board: Board) -> int:
     return min(2, board.rows // 2)
 
 
+def home_rank_rows(board: Board, player: Player) -> List[int]:
+    """Rzędy startowe (tylna linia obozu)."""
+    depth = _setup_depth(board)
+    if player.direction > 0:
+        return list(range(board.rows - depth, board.rows))
+    return list(range(depth))
+
+
+def count_internal_pawn_gaps_on_row(board: Board, row: int, symbol: str) -> int:
+    """Liczba dziur między pionami w rzędzie (0 = zwarta linia)."""
+    cols = sorted(
+        c for c in range(board.cols) if board.grid[row][c] == symbol
+    )
+    if len(cols) < 2:
+        return 0
+    gaps = 0
+    for index in range(len(cols) - 1):
+        if cols[index + 1] - cols[index] > 1:
+            gaps += 1
+    return gaps
+
+
+def max_home_rank_gaps(board: Board, player: Player) -> int:
+    return max(
+        (
+            count_internal_pawn_gaps_on_row(board, row, player.symbol)
+            for row in home_rank_rows(board, player)
+        ),
+        default=0,
+    )
+
+
+def move_creates_double_home_gap(board: Board, player: Player, move: Move) -> bool:
+    trial = Board([row[:] for row in board.grid])
+    trial.apply_move(move, player)
+    return max_home_rank_gaps(trial, player) >= 2
+
+
+def premature_wing_advance(board: Board, player: Player, move: Move) -> bool:
+    """Za szybkie skrzydło: dziura na tylnej linii lub druga luka między pionami."""
+    if move.is_capture or move.to_row == player.goal_row:
+        return False
+    guard = flank_guard_columns(board)
+    edge = edge_columns(board)
+    if move.from_col not in guard:
+        return False
+    if _forward_steps(move, player) <= 0:
+        return False
+    if move_creates_double_home_gap(board, player, move):
+        return True
+    side_edge = min(edge) if move.from_col <= min(guard) else max(edge)
+    for row in home_rank_rows(board, player):
+        if board.grid[row][side_edge] in {"_", "o"}:
+            return True
+    return False
+
+
 def _has_left_home_rank(board: Board, row: int, player: Player) -> bool:
     setup = _setup_depth(board)
     if player.direction > 0:
@@ -178,6 +235,28 @@ def weaker_opponent_flank(board: Board, perspective: Player) -> str:
     return "right"
 
 
+def weak_flank_breakthrough_ready(board: Board, perspective: Player) -> bool:
+    """Czy na słabszym skrzydle przeciwnika da się sensownie przebić do mety."""
+    left = flank_lane_strength(board, perspective, "left")
+    right = flank_lane_strength(board, perspective, "right")
+    weak = weaker_opponent_flank(board, perspective)
+    weak_val = left if weak == "left" else right
+    strong_val = right if weak == "left" else left
+    if weak_val + 1.5 > strong_val:
+        return False
+    edge = edge_columns(board)
+    for row, col in _piece_positions(board, perspective.symbol):
+        if col in edge:
+            continue
+        if weak == "left" and col <= 1:
+            if abs(row - perspective.goal_row) <= 4:
+                return True
+        elif weak == "right" and col >= board.cols - 2:
+            if abs(row - perspective.goal_row) <= 4:
+                return True
+    return False
+
+
 def move_targets_weak_flank(board: Board, move: Move, player: Player) -> bool:
     weak = weaker_opponent_flank(board, player)
     if weak == "left":
@@ -240,7 +319,7 @@ def move_priority(board: Board, move: Move, player: Player, phase: StylePhase) -
     )
 
     if phase == "opening":
-        # Puste tylko kolumny 0 i ostatnia; figury zostają na 1 i przedostatniej.
+        # Puste tylko kolumny 0 i ostatnia; jedno skrzydło naraz, max 1 luka w linii tylnej.
         if move.from_col in edge_cols and move.to_col in guard_cols:
             priority += 75
         if move.from_col in edge_cols:
@@ -252,13 +331,24 @@ def move_priority(board: Board, move: Move, player: Player, phase: StylePhase) -
         if is_center_diagonal_opening_move(board, move, player):
             priority += 65
         if move.from_col in edge_cols and move.to_col in edge_cols:
-            priority -= 80
+            priority -= 120
         if forward > 0 and move.from_col in edge_cols:
-            priority -= 70
+            priority -= 90
+        if premature_wing_advance(board, player, move):
+            priority -= 150
+        if move_creates_double_home_gap(board, player, move):
+            priority -= 200
+        if move.from_col in guard_cols and forward > 0:
+            other_guard = max(guard_cols) if move.from_col == min(guard_cols) else min(guard_cols)
+            if any(
+                board.grid[row][other_guard] == player.symbol
+                for row in home_rank_rows(board, player)
+            ):
+                priority -= 40
 
         priority += to_center * 10
         if move.is_capture:
-            priority -= 50
+            priority += 90
 
     elif phase == "maneuvering":
         if move.is_capture:
@@ -272,15 +362,17 @@ def move_priority(board: Board, move: Move, player: Player, phase: StylePhase) -
         if move.is_capture:
             priority += 80
         priority += max(forward, 0) * 16
-        if safe_flank_push and move_targets_weak_flank(board, move, player):
-            priority += 55
+        if move_targets_weak_flank(board, move, player):
+            priority += 85 if safe_flank_push else 45
         elif forward > 0:
             priority += to_center * 3
 
     else:
-        priority += max(forward, 0) * 18
+        priority += max(forward, 0) * 22
         if move.is_capture:
             priority += 35
+        if move_targets_weak_flank(board, move, player):
+            priority += 70
         priority += to_center * 5
 
     return priority

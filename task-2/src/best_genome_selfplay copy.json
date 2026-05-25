@@ -1,0 +1,29 @@
+{
+  "genome_id": 50,
+  "depth": 4,
+  "scales": {
+    "advancement": 1.5649449692849007,
+    "mobility": 1.148656270069717,
+    "goal_pressure": 1.5477595150183159,
+    "safety": 2.1690446162346437,
+    "center_control": 2.31302054859085,
+    "center_advancement": 0.8136714322594217,
+    "attack_threats": 1.6979865946471668,
+    "bottlenecks": 0.9588110865555703,
+    "material": 1.0284468226387147,
+    "chain_support": 2.242039691950946,
+    "fork_risk": 1.9165432124575115,
+    "blocked_trap": 1.8623491848783866,
+    "isolated_lead": 2.7671277594402284,
+    "suicidal_exposure": 2.8801445894272475,
+    "harmonious_development": 1.620611629138168,
+    "wing_vacancy": 1.7134875711461752,
+    "center_diagonal_setup": 1.2262219635203055,
+    "army_mobilization": 1.9782775490538056,
+    "active_pieces": 2.188434226266983,
+    "capture_options": 1.1639129753871775,
+    "flank_guard": 2.5127809388668307,
+    "weak_flank_attack": 1.5211889791786075,
+    "defend_our_flanks": 2.6566777624693265
+  }
+}

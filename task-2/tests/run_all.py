@@ -7,12 +7,14 @@ import test_brute_force
 import test_equivalence_nodes
 import test_equivalence_score
 import test_puzzles
+import test_tactics
 
 
 MODULES = (
     test_equivalence_score,
     test_equivalence_nodes,
     test_puzzles,
+    test_tactics,
     test_brute_force,
     test_argmax,
 )

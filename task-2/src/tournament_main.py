@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 
 # Limit 1 s od startu kontenera — handshake przed ciężkimi importami.
@@ -7,7 +8,9 @@ print("1 1", flush=True)
 
 from time import perf_counter
 
-from ai.agent_logic import choose_adaptive_heuristic, choose_move_for_agent
+from ai.tournament_search import choose_tournament_move, _fast_fallback_move
+from ai.eval_context import reset_active_genome, set_active_genome
+from ai.genome import BotGenome, load_genome_file
 from engine.board import Board
 from players.players import Player, TournamentBlack, TournamentWhite, get_opponent
 from tournament.protocol import (
@@ -18,20 +21,10 @@ from tournament.protocol import (
     read_line,
 )
 
-# Turniej: 1 s na ruch; zostawiamy zapas na I/O i jitter (suma spóźnień max 3 s).
-MOVE_TIME_BUDGET_S = 0.92
-MIN_SEARCH_DEPTH = 2
-MIN_TIME_TO_START_SEARCH_S = 0.22
-MAX_SINGLE_SEARCH_S = 0.35
-
-
-def max_search_depth(rows: int, cols: int) -> int:
-    area = rows * cols
-    if area <= 36:
-        return 5
-    if area <= 49:
-        return 4
-    return 3
+# Turniej: t_move=1.0 s — budżet wewnętrzny + twardy limit w play_turn.
+MOVE_TIME_BUDGET_S = 0.48
+MAX_SEARCH_DEPTH = 5
+HARD_TURN_LIMIT_S = 0.92
 
 
 def parse_game_info(line: str) -> tuple[int, int, int]:
@@ -65,54 +58,48 @@ def ingest_opponent_turn(
     raise ValueError(f"Unrecognized tournament input: {line!r}")
 
 
-def choose_heuristic(board: Board, player: Player) -> str:
-    return choose_adaptive_heuristic(board, player, "breakthrough")
-
-
-def play_turn(board: Board, player: Player, rows: int) -> None:
+def play_turn(board: Board, player: Player, rows: int, genome: BotGenome | None) -> None:
     legal_moves = board.get_legal_moves(player)
     if not legal_moves:
-        return
+        raise SystemExit(0)
 
-    deadline = perf_counter() + MOVE_TIME_BUDGET_S
-    chosen = legal_moves[0]
-    depth = MIN_SEARCH_DEPTH
-    depth_limit = max_search_depth(rows, board.cols)
-    while depth <= depth_limit:
-        remaining = deadline - perf_counter()
-        if remaining < MIN_TIME_TO_START_SEARCH_S:
-            break
-        heuristic_name = choose_heuristic(board, player)
-        search_start = perf_counter()
-        move, _visited, elapsed = choose_move_for_agent(
-            board=board,
-            player=player,
-            agent_type="minimax",
-            depth=depth,
-            heuristic_name=heuristic_name,
-            use_alpha_beta=True,
-            epsilon=0.0,
-        )
-        elapsed = perf_counter() - search_start
-        if move is not None:
-            chosen = move
-        if elapsed > MAX_SINGLE_SEARCH_S:
-            break
-        if deadline - perf_counter() < MIN_TIME_TO_START_SEARCH_S:
-            break
-        depth += 1
+    search_depth = MAX_SEARCH_DEPTH
+    if genome is not None:
+        search_depth = max(MAX_SEARCH_DEPTH, min(5, genome.depth + 3))
 
-    if chosen not in legal_moves:
-        chosen = legal_moves[0]
+    turn_start = perf_counter()
+    token = set_active_genome(genome) if genome else None
+    move = None
+    try:
+        if perf_counter() - turn_start < HARD_TURN_LIMIT_S - 0.05:
+            move, _visited, _elapsed = choose_tournament_move(
+                board,
+                player,
+                time_limit_s=MOVE_TIME_BUDGET_S,
+                max_depth=search_depth,
+                heuristic_name="breakthrough",
+                use_mcts=False,
+            )
+    finally:
+        if token is not None:
+            reset_active_genome(token)
+
+    if move is None or move not in legal_moves:
+        move = _fast_fallback_move(board, player)
+    if move not in legal_moves:
+        move = legal_moves[0]
 
     try:
-        emit_move(chosen, rows)
+        emit_move(move, rows)
     except BrokenPipeError:
         raise SystemExit(0) from None
-    board.apply_move(chosen, player)
+    board.apply_move(move, player)
 
 
 def main() -> None:
+    # Domyślnie: src/best_genome_selfplay.json. BREAKTHROUGH_GENOME nadpisuje ścieżkę.
+    genome = load_genome_file(os.environ.get("BREAKTHROUGH_GENOME"))
+
     cols, rows, player_id = parse_game_info(read_line())
     me = make_player(player_id, rows)
     opponent = get_opponent(me)
@@ -126,7 +113,7 @@ def main() -> None:
         board = ingest_opponent_turn(incoming, board, cols, rows, opponent)
 
     while True:
-        play_turn(board, me, rows)
+        play_turn(board, me, rows, genome)
         try:
             incoming = read_line()
         except EOFError:
