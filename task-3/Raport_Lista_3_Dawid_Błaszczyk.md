@@ -34,7 +34,7 @@ Planer szuka sekwencji **zinstancjonowanych** akcji prowadzącej ze stanu począ
 
 ### 1.2. Model STRIPS
 
-W podstawowym wariancie (**STRIPS**, wymaganie `:strips`) każda akcja ma:
+W podstawowym wariancie (**strips**, wymaganie `:strips`) każda akcja ma:
 
 - **warunki wstępne** (*preconditions*) — fakty, które muszą być prawdziwe przed wykonaniem;
 - **efekty** — listę faktów do dodania i usunięcia (`not`).
@@ -43,36 +43,112 @@ W podstawowym wariancie (**STRIPS**, wymaganie `:strips`) każda akcja ma:
 
 Rozszerzenia używane w tej liście:
 
-| Rozszerzenie | Zastosowanie w projekcie |
-|--------------|--------------------------|
-| `:typing` | Typy `robot`, `room`, `package`, `truck`, … |
-| `:negative-preconditions` | `(not (at …))`, `(not (dirty …))` w efektach i warunkach |
-| `:durative-actions` | Akcje czasowe w Zadaniu 1 (ładowanie, jazda, lot; makespan) |
-| `:strips` | Podstawa wszystkich trzech zadań |
 
----
+| Rozszerzenie              | Zastosowanie w projekcie                                    |
+| ------------------------- | ----------------------------------------------------------- |
+| `:typing`                 | Typy `robot`, `room`, `package`, `truck`, …                 |
+| `:negative-preconditions` | `(not (at …))`, `(not (dirty …))` w efektach i warunkach    |
+| `:durative-actions`       | Akcje czasowe w Zadaniu 1 (ładowanie, jazda, lot; makespan) |
+| `:strips`                 | Podstawa wszystkich trzech zadań                            |
 
-## 2. Środowisko i uruchomienie planera
-
-| Narzędzie | Zastosowanie |
-|-----------|--------------|
-| **OPTIC** | Zadanie 1 — plan **czasowy** (`:durative-actions`, makespan) |
-| **Pyperplan** | Zadania 2 i 3 — STRIPS sekwencyjny |
-
-**Zadanie 1 (OPTIC lub inny planer temporalny):**
-
-Wgraj na [solver.planning.domains](https://solver.planning.domains/) planer **optic** oraz pliki:
-
-- `Zadanie-1/domain.pddl`
-- `Zadanie-1/problem.pddl` (albo `problem-optic.pddl` — ta sama instancja)
-
-Planer optymalizuje **czas zakończenia** (makespan), nie osobny fluent kosztowy.
 
 ---
 
 ## 3. Zadanie 1 — Transport intermodalny paczek (25 pkt)
 
-### 3.1. Opis problemu
+### 3.1. Model logiczny — domena
+
+Wymagania domeny: `:strips :typing :durative-actions`.
+
+**Typy** — hierarchia lokalizacji i pojazdów:
+
+```lisp
+(:types
+  location package vehicle - object
+  warehouse airport port station - location
+  truck plane ship train - vehicle
+)
+```
+
+**Predykaty kluczowe:**
+
+
+| Predykat                | Znaczenie                             |
+| ----------------------- | ------------------------------------- |
+| `(package-at ?p ?l)`    | Paczka w lokacji                      |
+| `(vehicle-at ?v ?l)`    | Pojazd w lokacji                      |
+| `(loaded ?p ?v)`        | Paczka na pokładzie                   |
+| `(vehicle-empty ?v)`    | Pojazd bez ładunku                    |
+| `(compatible ?p ?v)`    | Dopuszczalne połączenie paczka–pojazd |
+| `(road-connection …)`   | Droga                                 |
+| `(rail-connection …)`   | Kolej                                 |
+| `(sea-connection …)`    | Morze                                 |
+| `(flight-connection …)` | Lot                                   |
+
+
+**Przykład akcji czasowej** — załadunek (5 jednostek czasu):
+
+```lisp
+(:durative-action load
+  :parameters (?p - package ?v - vehicle ?l - location)
+  :duration (= ?duration 5)
+  :condition (and
+    (at start (package-at ?p ?l))
+    (at start (vehicle-at ?v ?l))
+    (at start (compatible ?p ?v))
+    (at start (vehicle-empty ?v))
+    (over all (vehicle-at ?v ?l))
+  )
+  :effect (and
+    (at start (not (package-at ?p ?l)))
+    (at start (not (vehicle-empty ?v)))
+    (at end (loaded ?p ?v))
+  )
+)
+```
+
+**Przemieszczanie pojazdów** — dla każdego typu pojazdu w domenie jest osobna akcja czasowa o **tym samym schemacie**: na początku pojazd stoi w `?from`, przez cały czas trwania musi obowiązywać właściwe połączenie w sieci (`over all`), na końcu pojazd jest w `?to`. Różnią się jedynie typem pojazdu, predykatem topologii i wartością `:duration`.
+
+Przykład — jazda ciężarówki po sieci drogowej (`drive-truck`, 15 jednostek czasu):
+
+```lisp
+(:durative-action drive-truck
+  :parameters (?t - truck ?from - location ?to - location)
+  :duration (= ?duration 15)
+  :condition (and
+    (at start (vehicle-at ?t ?from))
+    (over all (road-connection ?from ?to))
+  )
+  :effect (and
+    (at start (not (vehicle-at ?t ?from)))
+    (at end (vehicle-at ?t ?to))
+  )
+)
+```
+
+Analogiczne akcje dla pozostałych środków transportu:
+
+
+| Akcja        | Pojazd            | Połączenie                                | Czas |
+| ------------ | ----------------- | ----------------------------------------- | ---- |
+| `fly-plane`  | samolot (`plane`) | `flight-connection` (lotnisko → lotnisko) | 8    |
+| `sail-ship`  | statek (`ship`)   | `sea-connection` (port → port)            | 30   |
+| `move-train` | pociąg (`train`)  | `rail-connection` (stacja → stacja)       | 20   |
+
+
+**Czasy trwania akcji** — planer minimalizuje **makespan** (czas zakończenia ostatniej akcji):
+
+
+| Akcja             | Czas (`:duration`) | Uwaga                                          |
+| ----------------- | ------------------ | ---------------------------------------------- |
+| `load` / `unload` | 5                  | Operacje załadunku                             |
+| `drive-truck`     | 15                 | Droga                                          |
+| `fly-plane`       | 8                  | Najszybszy odcinek lotniczy                    |
+| `sail-ship`       | 30                 | Najwolniejszy, ale sensowny dla dużego ładunku |
+| `move-train`      | 20                 | Kolej                                          |
+
+
+### 3.2. Opis problemu
 
 **Cel:** Zaplanować dostawę czterech paczek do wskazanych lokalizacji, korzystając z sieci transportu **drogowego, kolejowego, morskiego i lotniczego**, z uwzględnieniem **czasu trwania** operacji.
 
@@ -98,91 +174,32 @@ Planer optymalizuje **czas zakończenia** (makespan), nie osobny fluent kosztowy
 
 **Ograniczenie zgodności** (`compatible`): np. `turbina_wiatrowa` nie może być ładowana do samolotu — wymusza trasę morską/kolejową/drogową.
 
-### 3.2. Model logiczny — domena
-
-Wymagania domeny: `:strips :typing :durative-actions`.
-
-**Typy** — hierarchia lokalizacji i pojazdów:
-
-```lisp
-(:types
-  location package vehicle - object
-  warehouse airport port station - location
-  truck plane ship train - vehicle
-)
-```
-
-**Predykaty kluczowe:**
-
-| Predykat | Znaczenie |
-|----------|-----------|
-| `(package-at ?p ?l)` | Paczka w lokacji |
-| `(vehicle-at ?v ?l)` | Pojazd w lokacji |
-| `(loaded ?p ?v)` | Paczka na pokładzie |
-| `(vehicle-empty ?v)` | Pojazd bez ładunku |
-| `(compatible ?p ?v)` | Dopuszczalne połączenie paczka–pojazd |
-| `(road-connection …)` | Droga |
-| `(rail-connection …)` | Kolej |
-| `(sea-connection …)` | Morze |
-| `(flight-connection …)` | Lot |
-
-**Przykład akcji czasowej** — załadunek (5 jednostek czasu):
-
-```lisp
-(:durative-action load
-  :parameters (?p - package ?v - vehicle ?l - location)
-  :duration (= ?duration 5)
-  :condition (and
-    (at start (package-at ?p ?l))
-    (at start (vehicle-at ?v ?l))
-    (at start (compatible ?p ?v))
-    (at start (vehicle-empty ?v))
-    (over all (vehicle-at ?v ?l))
-  )
-  :effect (and
-    (at start (not (package-at ?p ?l)))
-    (at start (not (vehicle-empty ?v)))
-    (at end (loaded ?p ?v))
-  )
-)
-```
-
-**Czasy trwania akcji** (`:duration`) — planer minimalizuje **makespan** (czas zakończenia ostatniej akcji):
-
-| Akcja | Czas (`:duration`) | Uwaga |
-|-------|---------------------|--------|
-| `load` / `unload` | 5 | Operacje załadunku |
-| `drive-truck` | 15 | Droga |
-| `fly-plane` | 8 | Najszybszy odcinek lotniczy |
-| `sail-ship` | 30 | Najwolniejszy, ale sensowny dla dużego ładunku |
-| `move-train` | 20 | Kolej |
-
-Analiza „kosztu” w sprawozdaniu: porównanie **czasów** trybów transportu (lot szybki lecz drogi w modelu czasu vs żegluga długa) oraz długości planu — bez osobnego fluentu `total-cost`, aby model działał w OPTIC bez ostrzeżeń metryki kosztowej.
-
 ### 3.3. Topologia sieci transportowej
 
 Sieć jest **skierowana** (połączenia dwukierunkowe zdefiniowane osobno). Kluczowe ścieżki w instancji:
 
-- **Droga:** magazyny i lotniska połączone z `warszawa_lotnisko` (węzeł centralny); `gdansk_port` ↔ `wroclaw_stacja`.
-- **Kolej:** trójkąt Wrocław – Kraków – Szczecin.
+- **Droga:** sieć ma charakter **gwiazdy** — magazyny i lotniska łączą się drogą z `warszawa_lotnisko` (główny węzeł przeładunkowy); dodatkowo istnieje bezpośredni odcinek `gdansk_port` ↔ `wroclaw_stacja`.
+- **Kolej:** stacje `wroclaw_stacja`, `krakow_stacja` i `szczecin_stacja` tworzą **trójkąt** — każda para jest połączona w obie strony.
 - **Morze:** `gdansk_port` ↔ `szczecin_port`.
 - **Lot:** `katowice_lotnisko` ↔ `warszawa_lotnisko` (samolot startuje w Katowicach).
 
 Topologia wymusza **zmianę trybu transportu** w węzłach przeładunkowych (np. port → ciężarówka → stacja → pociąg).
 
-### 3.4. Wynik planera — zrzut planu
+### 3.4. Wynik planera
 
-| Parametr | Wartość |
-|----------|---------|
-| Pliki | `domain.pddl`, `problem.pddl` |
-| Planer | **OPTIC** (lub planer temporalny; log w `Zadanie-1/plan.md`) |
-| Metryka | **makespan** (czas zakończenia planu) |
-| **Makespan** | **95,002** |
-| Liczba akcji czasowych | **22** (w tym równoległe od t = 0) |
-| Ocenione stany | 93 |
-| Czas planowania | ~0,15 s |
 
-Fragment planu (równoległe operacje — liczba w `[…]` to czas trwania akcji):
+| Parametr               | Wartość                                                      |
+| ---------------------- | ------------------------------------------------------------ |
+| Pliki                  | `domain.pddl`, `problem.pddl`                                |
+| Planer                 | **OPTIC** (lub planer temporalny; log w `Zadanie-1/plan.md`) |
+| Metryka                | **makespan** (czas zakończenia planu)                        |
+| **Makespan**           | **95,002**                                                   |
+| Liczba akcji czasowych | **22** (w tym równoległe od t = 0)                           |
+| Ocenione stany         | 93                                                           |
+| Czas planowania        | ~0,15 s                                                      |
+
+
+Fragment planu:
 
 ```
 0.000: (move-train pociag_towarowy wroclaw_stacja szczecin_stacja)     [20.000]
@@ -207,7 +224,7 @@ Pełny log: `Zadanie-1/plan.md`.
 
 #### Długość i czas trwania
 
-- **22 akcje** czasowe (w tym równoległe wątki od t = 0).
+- **22 akcje** czasowe.
 - **Makespan 95,002** — krytyczna ścieżka: turbina (żegluga 30 + TIR + pociąg 20) oraz równoległe dostawy pozostałych paczek.
 - Planer **minimalizuje czas zakończenia**, nie liczbę kroków — stąd sens równoległego `load` i `drive`.
 - **Długość planu** (22) vs **makespan** (95): przy durative to różne miary — ważniejszy jest czas końcowy.
@@ -215,28 +232,15 @@ Pełny log: `Zadanie-1/plan.md`.
 
 #### Wpływ topologii
 
-| Aspekt | Obserwacja |
-|--------|------------|
-| Węzeł Warszawa | Hub drogowy — większość tras TIR przechodzi przez lotnisko/miasto |
-| Morze | Skraca transport turbiny wzdłuż wybrzeża (Gdańsk–Szczecin) vs objazd lądem |
-| Kolej | Jedyny sensowny sposób dostawy turbiny do `krakow_stacja` ze Szczecina |
-| Lot | W tej instancji samolot **nie** pojawia się w planie — brak opłacalnej trasy dla celów |
-| Ograniczenia `compatible` | Wymuszają wieloetapowy łańcuch dla dużego ładunku |
 
-#### Eksperyment mentalny — uproszczona topologia
+| Aspekt                    | Obserwacja                                                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Węzeł Warszawa            | `warszawa_lotnisko` jest centralnym punktem sieci drogowej — w planie większość przejazdów ciężarówek obejmuje ten węzeł |
+| Morze                     | Skraca transport turbiny wzdłuż wybrzeża (Gdańsk–Szczecin) vs objazd lądem                                               |
+| Kolej                     | Jedyny sensowny sposób dostawy turbiny do `krakow_stacja` ze Szczecina                                                   |
+| Lot                       | W tej instancji samolot **nie** pojawia się w planie — brak opłacalnej trasy dla celów                                   |
+| Ograniczenia `compatible` | Wymuszają wieloetapowy łańcuch dla dużego ładunku                                                                        |
 
-Gdyby `turbina_wiatrowa` startowała już przy `szczecin_stacja` i brakowało połączenia morskiego, makespan wzrósłby (dłuższy objazd TIR-em). Obecna sieć portów **skraca** krytyczną ścieżkę dla najcięższego ładunku.
-
-### 3.6. Mapowanie na wymagania listy
-
-| Wymaganie listy | Realizacja |
-|-----------------|------------|
-| `:strips`, `:typing` | Tak |
-| `:negative-preconditions` | `not` w efektach durative |
-| `:durative-actions` | Wszystkie operatory transportu i ładunku |
-| Złożona topologia | road / rail / sea / flight |
-| Czas trwania | `:duration` per akcja |
-| Koszty akcji (`:action-costs`) | Nie (uproszczenie pod OPTIC); analiza przez **czasy** `:duration` |
 
 ---
 
@@ -320,15 +324,15 @@ Planer: **Pyperplan**, przeszukiwanie **BFS**.
 (clean robot pokoj3)
 ```
 
-| Metryka | Wartość |
-|---------|---------|
-| Długość planu | **5** akcji |
-| Rozwinięte węzły | 22 |
-| Czas planowania | ~0,3 ms |
+
+| Metryka          | Wartość     |
+| ---------------- | ----------- |
+| Długość planu    | **5** akcji |
+| Rozwinięte węzły | 22          |
+| Czas planowania  | ~0,3 ms     |
+
 
 Plik: `Zadanie-2/problem.pddl.soln`.
-
-**Zrzut planu:** sekwencja pięciu kroków w solverze online (równoważna trasie pokoj1 → pokoj2 → pokoj3).
 
 ### 4.5. Analiza
 
@@ -344,31 +348,17 @@ Plik: `Zadanie-2/problem.pddl.soln`.
 - Robot startuje w `pokoj1`; musi być fizycznie w `pokoj2` i `pokoj3` → co najmniej **2** akcje `move`.
 - **Dolna granica: 3 + 2 = 5** — plan BFS jest **optymalny**.
 
-#### Kolejność odwiedzin
-
-Przy pełnej łączności grafu plan **pokoj1 → pokoj2 → pokoj3** jest naturalny. Inna permutacja (np. 1 → 3 → 2) też ma długość 5 — planer wybiera deterministycznie pierwszą znalezioną ścieżkę optymalną.
-
-#### Stany pośrednie
-
-| Po kroku | Pozycja robota | Brudne | Czyste |
-|----------|----------------|--------|--------|
-| 0 | pokoj1 | 1, 2, 3 | — |
-| 1 | pokoj1 | 2, 3 | pokoj1 |
-| 2 | pokoj2 | 2, 3 | pokoj1 |
-| 3 | pokoj2 | 3 | pokoj1, pokoj2 |
-| 5 | pokoj3 | — | 1, 2, 3 ✓ |
-
 ---
 
 ## 5. Zadanie 3 — Robot z dwoma ramionami (10 pkt)
 
 ### 5.1. Opis problemu
 
-Robot z **dwoma ramionami** (`arm1`, `arm2`) przenosi **cztery piłki** z `room1` do `room2`. Dozwolone akcje: `move`, `pick-up`, `put-down` — zgodnie z materiałami [IDA LiU](https://www.ida.liu.se/~heltand/planning/).
+Robot z **dwoma ramionami** (`arm1`, `arm2`) przenosi **cztery piłki** z `room1` do `room2`. Dozwolone akcje: `move`, `pick-up`, `put-down`.
 
 ### 5.2. Domena i problem (zgodne z listą)
 
-Fragment `domain.pddl` (schemat `pick-up`):
+Fragment `domain.pddl`:
 
 ```lisp
 (:action pick-up
@@ -399,7 +389,7 @@ Cel w `problem.pddl`:
 
 ### 5.3. Wygenerowany plan
 
-**Pyperplan (BFS)** — `Zadanie-3/problem.pddl.soln`:
+`Zadanie-3/problem.pddl.soln`:
 
 ```
 (pick-up robot arm2 ball3 room1)
@@ -415,102 +405,53 @@ Cel w `problem.pddl`:
 (put-down robot arm1 ball4 room2)
 ```
 
-**solver.planning.domains** (zrzut: `Zadanie-3/image.png`) — plan równie długi (**11** kroków), z innym przypisaniem piłek do ramion (np. `ball1`/`ball2` w pierwszym wsadzie zamiast `ball3`/`ball1`). Obie wersje są **poprawne i optymalne**.
 
-| Metryka | Wartość |
-|---------|---------|
-| Długość planu | **11** |
-| Rozwinięte węzły (BFS) | 253 |
-| Czas planowania | ~3 ms |
-| Zinstancjonowane operatory | 34 |
+| Metryka                    | Wartość |
+| -------------------------- | ------- |
+| Długość planu              | **11**  |
+| Rozwinięte węzły (BFS)     | 253     |
+| Czas planowania            | ~3 ms   |
+| Zinstancjonowane operatory | 34      |
+
 
 ### 5.4. Analiza planu
 
 #### Poprawność
 
 - Kroki 1–2: dwa podniesienia — oba ramiona zajęte, piłki znikają z `room1`.
-- Krok 3: `move` — robot zmienia pokój; piłki w ramionach (nie wymagają `inroom` w trakcie transportu).
+- Krok 3: `move` — robot zmienia pokój; piłki w ramionach.
 - Kroki 4–5: `put-down` w `room2`.
 - Krok 6: powrót po pozostałe piłki.
-- Kroki 7–11: drugi wsad — po zakończeniu wszystkie piłki w `room2`.
+- Kroki 7–11: powtórzenie wcześniejszych ruchów  — po zakończeniu wszystkie piłki w `room2`.
 
 #### Wykorzystanie dwóch ramion
 
-Robot może nieść **co najwyżej 2** piłki naraz → przy 4 piłkach potrzeba **≥ 2** kursów `room1 → room2`. Plan realizuje **dwa wsady po 2 piłki** — optymalna strategia równoległego użycia ramion.
+Robot może nieść **co najwyżej 2** piłki naraz → przy 4 piłkach potrzeba **≥ 2** kursów `room1 → room2`. Plan realizuje **dwa przemieszczenia po 2 piłki** — optymalna strategia równoległego użycia ramion.
 
 #### Optymalność
 
-Jeden pełny wsad: 2×`pick-up` + 1×`move` + 2×`put-down` = **5** akcji.  
+Jedno pełne przemieszczenie: 2×`pick-up` + 1×`move` + 2×`put-down` = **5** akcji.  
 Między wsadami: 1×`move` powrotny.  
 Razem: **5 + 1 + 5 = 11** — dolna granica; BFS gwarantuje optimum.
-
-Wariant „jedna piłka na kurs” wymagałby ok. **19** kroków (4×(pick-up, move, put-down) + 3 powroty).
-
-#### Stany pośrednie (skrót)
-
-| Po kroku | Robot | room1 | room2 | Ramiona |
-|----------|-------|-------|-------|---------|
-| 0 | room1 | ball1–4 | — | puste |
-| 2 | room1 | ball2, ball4 | — | ball3, ball1 |
-| 5 | room2 | ball2, ball4 | ball3, ball1 | puste |
-| 11 | room2 | — | ball1–4 | puste ✓ |
 
 ---
 
 ## 6. Porównanie eksperymentów
 
-| Zadanie | Planer | Typ planu | Wynik | Stany | Czas planera |
-|---------|--------|-----------|-------|-------|--------------|
-| 1 — Transport | OPTIC | durative | makespan **95,002**, 22 akcje | 93 | ~0,15 s |
-| 2 — Odkurzacz | Pyperplan BFS | STRIPS | **5** kroków | 22 | ~0,3 ms |
-| 3 — Piłki | Pyperplan BFS | STRIPS | **11** kroków | 253 | ~3 ms |
 
-**Wnioski porównawcze:**
+| Zadanie       | Planer        | Typ planu | Wynik                         | Stany | Czas planera |
+| ------------- | ------------- | --------- | ----------------------------- | ----- | ------------ |
+| 1 — Transport | OPTIC         | durative  | makespan **95,002**, 22 akcje | 93    | ~0,15 s      |
+| 2 — Odkurzacz | Pyperplan BFS | STRIPS    | **5** kroków                  | 22    | ~0,3 ms      |
+| 3 — Piłki     | Pyperplan BFS | STRIPS    | **11** kroków                 | 253   | ~3 ms        |
 
-1. **Złożoność domeny** rośnie gwałtownie z liczbą typów, predykatów i równoległością (Zadanie 1 >> 3 >> 2).
-2. **Metryka planu:** Zadanie 1 — **makespan** (95); Zadania 2 i 3 — liczba kroków (5, 11).
-3. **OPTIC + durative** — jeden spójny model (`domain.pddl` / `problem.pddl`) bez osobnego fluentu kosztowego.
-4. **BFS** (Zad. 2–3) daje optimum długości; planer temporalny — optimum czasu zakończenia.
-5. **Topologia i `compatible`** determinują plan (statek + TIR + kolej dla turbiny; brak lotu).
 
 ---
 
 ## 7. Wnioski końcowe
 
 1. **PDDL** skutecznie oddziela wiedzę o działaniach (domena) od konkretnej instancji (problem), co ułatwia testowanie różnych scenariuszy transportu lub robota bez zmiany schematów akcji.
-
 2. **STRIPS z typowaniem** (Zadania 2 i 3) jest wystarczający do klasycznych problemów sekwencyjnych; planer szybko znajduje optimum na małych przestrzeniach stanów.
-
-3. **Akcje czasowe** (Zadanie 1) modelują równoległość — makespan **95,002** przy 22 akcjach; plan uruchamiany w OPTIC na `domain.pddl` + `problem.pddl`.
-
+3. **Akcje czasowe** modelują równoległość.
 4. **Topologia i ograniczenia** (`compatible`, rodzaje połączeń) mają większy wpływ na plan niż liczba paczek — turbina wymusza łańcuch morze → droga → kolej.
 
-6. W kontekście **Sztucznej Inteligencji i Inżynierii Wiedzy** planowanie PDDL uzupełnia Listę 2 (Minimax): agent buduje plan z operatorów logicznych zamiast oceniać pozycję heurystyką.
-
----
-
-## 8. Bibliografia i załączniki
-
-### Literatura i narzędzia
-
-- Materiały wykładowe oraz [IDA LiU — Planning](https://www.ida.liu.se/~heltand/planning/)
-- [editor.planning.domains](https://editor.planning.domains)
-- [solver.planning.domains](https://solver.planning.domains)
-- [Fast Downward](https://www.fast-downward.org/)
-- [Planning Wiki — PDDL](https://planning.wiki/ref/pddl/domain)
-- [LearnPDDL](https://fareskalaboud.github.io/LearnPDDL/)
-- [Intro to PDDL (Toronto)](https://www.cs.toronto.edu/~sheila/2542/s14/A1/introtopddl2.pdf)
-- [PDDL tutorial (PDDL4J)](http://pddl4j.imag.fr/pddl_tutorial.html)
-
-### Załączniki (pliki PDDL projektu)
-
-| Zadanie | Domena | Problem | Plan / log |
-|---------|--------|---------|------------|
-| 1 | `domain.pddl` | `problem.pddl` | `plan.md` (makespan 95,002) |
-| 1 (opc.) | `domain.pddl` | `problem-optic.pddl` | kopia instancji pod OPTIC |
-| 2 | `Zadanie-2/domain.pddl` | `Zadanie-2/problem.pddl` | `problem.pddl.soln` |
-| 3 | `Zadanie-3/domain.pddl` | `Zadanie-3/problem.pddl` | `problem.pddl.soln`, `image.png` |
-
----
-
-*Raport sporządzono na podstawie implementacji w katalogu `task-3`, wyników planerów OPTIC i Pyperplan oraz struktury raportu z Listy nr 2 (Minimax / Breakthrough).*
