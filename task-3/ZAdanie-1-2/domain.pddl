@@ -1,130 +1,104 @@
 (define (domain transport_system)
+  (:requirements :strips :typing :durative-actions)
 
-  (:requirements :strips :typing :negative-preconditions :numeric-fluents :durative-actions)
-
-  (:types
-    location physobj - object
-    package vehicle - physobj
+(:types
+    location package vehicle - object
     warehouse airport port station - location
     truck plane ship train - vehicle
   )
 
   (:predicates
-    (at ?obj - physobj ?l - location)
-    (in ?p - package ?v - vehicle)
-    ;; Droga: ciężarówki — dowolna lokacja (magazyn, lotnisko, port, stacja)
+    (package-at ?p - package ?l - location)
+    (vehicle-at ?v - vehicle ?l - location)
+    (loaded ?p - package ?v - vehicle)
+    (vehicle-empty ?v - vehicle)
+    (compatible ?p - package ?v - vehicle)
     (road-connection ?l1 - location ?l2 - location)
-    ;; Lot: wyłącznie między lotniskami
     (flight-connection ?l1 - airport ?l2 - airport)
-    ;; Kolej: wyłącznie między stacjami
     (rail-connection ?l1 - station ?l2 - station)
-    ;; Morze: wyłącznie między portami
     (sea-connection ?l1 - port ?l2 - port)
-  )
-
-  (:functions
-    (total-cost)
-    (road-cost ?l1 - location ?l2 - location)
-    (flight-cost ?l1 - airport ?l2 - airport)
-    (rail-cost ?l1 - station ?l2 - station)
-    (sea-cost ?l1 - port ?l2 - port)
-    (road-duration ?l1 - location ?l2 - location)
-    (flight-duration ?l1 - airport ?l2 - airport)
-    (rail-duration ?l1 - station ?l2 - station)
-    (sea-duration ?l1 - port ?l2 - port)
-    (package-size ?p - package)
-    (space-available ?v - vehicle)
   )
 
   (:durative-action load
     :parameters (?p - package ?v - vehicle ?l - location)
-    :duration (= ?duration (package-size ?p))
+    :duration (= ?duration 5)
     :condition (and
-      (at start (at ?p ?l))
-      (at start (at ?v ?l))
-      (at start (>= (space-available ?v) (package-size ?p)))
-      (over all (at ?v ?l))
+      (at start (package-at ?p ?l))
+      (at start (vehicle-at ?v ?l))
+      (at start (compatible ?p ?v))
+      (at start (vehicle-empty ?v))
+      (over all (vehicle-at ?v ?l))
     )
     :effect (and
-      (at start (not (at ?p ?l)))
-      (at start (decrease (space-available ?v) (package-size ?p)))
-      (at end (in ?p ?v))
-      (at end (increase (total-cost) 10))
+      (at start (not (package-at ?p ?l)))
+      (at start (not (vehicle-empty ?v)))
+      (at end (loaded ?p ?v))
     )
   )
 
   (:durative-action unload
     :parameters (?p - package ?v - vehicle ?l - location)
-    :duration (= ?duration (package-size ?p))
+    :duration (= ?duration 5)
     :condition (and
-      (at start (in ?p ?v))
-      (over all (at ?v ?l))
+      (at start (loaded ?p ?v))
+      (over all (vehicle-at ?v ?l))
     )
     :effect (and
-      (at start (not (in ?p ?v)))
-      (at end (at ?p ?l))
-      (at end (increase (space-available ?v) (package-size ?p)))
-      (at end (increase (total-cost) 10))
+      (at start (not (loaded ?p ?v)))
+      (at end (package-at ?p ?l))
+      (at end (vehicle-empty ?v))
     )
   )
 
   (:durative-action drive-truck
     :parameters (?t - truck ?from - location ?to - location)
-    :duration (= ?duration (road-duration ?from ?to))
+    :duration (= ?duration 15)
     :condition (and
-      (at start (at ?t ?from))
-      (at start (not (at ?t ?to)))
+      (at start (vehicle-at ?t ?from))
       (over all (road-connection ?from ?to))
     )
     :effect (and
-      (at start (not (at ?t ?from)))
-      (at end (at ?t ?to))
-      (at end (increase (total-cost) (road-cost ?from ?to)))
+      (at start (not (vehicle-at ?t ?from)))
+      (at end (vehicle-at ?t ?to))
     )
   )
 
   (:durative-action fly-plane
-    :parameters (?p - plane ?from - airport ?to - airport)
-    :duration (= ?duration (flight-duration ?from ?to))
+    :parameters (?a - plane ?from - airport ?to - airport)
+    :duration (= ?duration 8)
     :condition (and
-      (at start (at ?p ?from))
-      (at start (not (at ?p ?to)))
+      (at start (vehicle-at ?a ?from))
       (over all (flight-connection ?from ?to))
     )
     :effect (and
-      (at start (not (at ?p ?from)))
-      (at end (at ?p ?to))
-      (at end (increase (total-cost) (flight-cost ?from ?to)))
+      (at start (not (vehicle-at ?a ?from)))
+      (at end (vehicle-at ?a ?to))
     )
   )
 
   (:durative-action sail-ship
     :parameters (?s - ship ?from - port ?to - port)
-    :duration (= ?duration (sea-duration ?from ?to))
+    :duration (= ?duration 30)
     :condition (and
-      (at start (at ?s ?from))
-      (at start (not (at ?s ?to)))
+      (at start (vehicle-at ?s ?from))
       (over all (sea-connection ?from ?to))
     )
     :effect (and
-      (at start (not (at ?s ?from)))
-      (at end (at ?s ?to))
-      (at end (increase (total-cost) (sea-cost ?from ?to)))
+      (at start (not (vehicle-at ?s ?from)))
+      (at end (vehicle-at ?s ?to))
     )
   )
 
   (:durative-action move-train
     :parameters (?tr - train ?from - station ?to - station)
-    :duration (= ?duration (rail-duration ?from ?to))
+    :duration (= ?duration 20)
     :condition (and
-      (at start (at ?tr ?from))
-      (at start (not (at ?tr ?to)))
+      (at start (vehicle-at ?tr ?from))
       (over all (rail-connection ?from ?to))
     )
     :effect (and
-      (at start (not (at ?tr ?from)))
-      (at end (at ?tr ?to))
-      (at end (increase (total-cost) (rail-cost ?from ?to)))
+      (at start (not (vehicle-at ?tr ?from)))
+      (at end (vehicle-at ?tr ?to))
     )
   )
 )
