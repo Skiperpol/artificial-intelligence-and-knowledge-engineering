@@ -1,0 +1,5 @@
+(clean robot pokoj1)
+(move robot pokoj1 pokoj2)
+(clean robot pokoj2)
+(move robot pokoj2 pokoj3)
+(clean robot pokoj3)
