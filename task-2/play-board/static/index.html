@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Breakthrough — gra z botem</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Breakthrough</h1>
+    <p class="subtitle">Przeciągnij pion na podświetlone pole. Bot = silnik turniejowy.</p>
+  </header>
+
+  <section class="toolbar">
+    <label>
+      Ty grasz jako
+      <select id="human-side">
+        <option value="B">B (czarne, zaczynasz)</option>
+        <option value="W">W (białe)</option>
+      </select>
+    </label>
+    <button type="button" id="btn-new">Nowa gra</button>
+    <span id="status" class="status">Ładowanie…</span>
+  </section>
+
+  <main>
+    <div id="board" class="board" aria-label="Plansza"></div>
+    <aside class="sidebar">
+      <h2>Legenda</h2>
+      <ul>
+        <li><span class="swatch b"></span> B — cel: dół planszy</li>
+        <li><span class="swatch w"></span> W — cel: góra</li>
+        <li><span class="hint-target"></span> dozwolone pole</li>
+        <li><span class="hint-last"></span> skąd poszedł ostatni ruch</li>
+      </ul>
+      <p id="help" class="help">
+        Kliknij pion, potem pole docelowe — albo przeciągnij na zielone pole.
+      </p>
+    </aside>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
