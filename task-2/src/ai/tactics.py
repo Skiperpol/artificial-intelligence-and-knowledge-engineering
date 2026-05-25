@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from math import inf
-from typing import List
+from typing import List, Set, Tuple
 
 from engine.board import Board, Move
 from players.players import Player, get_opponent
@@ -135,6 +135,133 @@ def is_capture_trap(board: Board, player: Player, move: Move) -> bool:
     return False
 
 
+def _capture_on_square_hurts_us(
+    board: Board, player: Player, row: int, col: int
+) -> bool:
+    """Czy przeciwnik może zbić na tym polu z realną stratą materiału."""
+    opponent = get_opponent(player)
+    caps = _opponent_capture_moves_on(board, player, row, col)
+    if not caps:
+        return False
+    pieces_before = board.count_pieces(player.symbol)
+    for opp_move in caps:
+        after = copy_board(board)
+        after.apply_move(opp_move, opponent)
+        if after.has_player_won(opponent):
+            return True
+        if find_immediate_win(after, player) is not None:
+            continue
+        if get_good_captures(after, player):
+            continue
+        if after.count_pieces(player.symbol) < pieces_before:
+            return True
+    return False
+
+
+def is_hanging_piece_at(board: Board, player: Player, row: int, col: int) -> bool:
+    """Niechroniony pion, którego przeciwnik może zbić z korzyścią."""
+    if board.grid[row][col] != player.symbol:
+        return False
+    if _is_protected(board, row, col, player):
+        return False
+    return _capture_on_square_hurts_us(board, player, row, col)
+
+
+def list_hanging_squares(board: Board, player: Player) -> List[Tuple[int, int]]:
+    hanging: List[Tuple[int, int]] = []
+    for row in range(board.rows):
+        for col in range(board.cols):
+            if is_hanging_piece_at(board, player, row, col):
+                hanging.append((row, col))
+    return hanging
+
+
+def threat_piece_squares(
+    board: Board, player: Player, hanging: List[Tuple[int, int]]
+) -> Set[Tuple[int, int]]:
+    """Pola, na których stoi przeciwnik mogący zbić wiszący pion w następnej turze."""
+    threats: Set[Tuple[int, int]] = set()
+    for row, col in hanging:
+        for opp_move in _opponent_capture_moves_on(board, player, row, col):
+            threats.add((opp_move.from_row, opp_move.from_col))
+    return threats
+
+
+def quiet_move_adds_support(
+    board: Board, player: Player, move: Move, row: int, col: int
+) -> bool:
+    """Inny pion zasłania wiszący — nie liczy się ucieczka samego zagrożonego."""
+    if move.is_capture or (move.from_row == row and move.from_col == col):
+        return False
+    trial = copy_board(board)
+    trial.apply_move(move, player)
+    if trial.grid[row][col] != player.symbol:
+        return False
+    return _is_protected(trial, row, col, player)
+
+
+def has_quiet_protection_for_hanging(
+    board: Board, player: Player, hanging: List[Tuple[int, int]]
+) -> bool:
+    """Czy da się w tej turze dodać wsparcie innym pionem (bez ruszania ofiary)."""
+    for move in board.get_legal_moves(player):
+        if move.is_capture:
+            continue
+        if move_allows_opponent_win_in_one(board, player, move):
+            continue
+        if move_exposes_hanging_piece(board, player, move):
+            continue
+        if all(
+            quiet_move_adds_support(board, player, move, row, col)
+            for row, col in hanging
+        ):
+            return True
+    return False
+
+
+def find_preemptive_threat_capture(board: Board, player: Player) -> Move | None:
+    """
+    Zbij pion zagrożenia, gdy mamy niechronionego własnego pionka
+    i w tej turze nie dodajemy ochrony cichym ruchem.
+    """
+    hanging = list_hanging_squares(board, player)
+    if not hanging:
+        return None
+
+    threats = threat_piece_squares(board, player, hanging)
+    if not threats:
+        return None
+
+    if has_quiet_protection_for_hanging(board, player, hanging):
+        return None
+
+    candidates = [
+        move
+        for move in get_good_captures(board, player)
+        if (move.to_row, move.to_col) in threats
+    ]
+    if not candidates:
+        return None
+
+    def rank(move: Move) -> tuple:
+        trial = copy_board(board)
+        trial.apply_move(move, player)
+        resolved = sum(
+            1
+            for row, col in hanging
+            if trial.grid[row][col] != player.symbol
+            or not is_hanging_piece_at(trial, player, row, col)
+        )
+        return (
+            1 if trial.has_player_won(player) else 0,
+            1 if is_free_capture(board, player, move) else 0,
+            resolved,
+            goal_progress_score(move, player),
+        )
+
+    return max(candidates, key=rank)
+
+
 def move_exposes_hanging_piece(board: Board, player: Player, move: Move) -> bool:
     """Cichy ruch pozwala przeciwnikowi zbić (zwłaszcza bez odpowiedzi)."""
     if move.is_capture or move.to_row == player.goal_row:
@@ -207,7 +334,10 @@ def find_best_capture(board: Board, player: Player) -> Move | None:
 
 
 def find_mandatory_capture(board: Board, player: Player) -> Move | None:
-    """Zawsze bierz darmowe bicie; inaczej najlepsze bezpieczne bicie."""
+    """Bicie zagrożenia / darmowe / inne dobre bicie — w tej kolejności."""
+    threat = find_preemptive_threat_capture(board, player)
+    if threat is not None:
+        return threat
     return find_best_capture(board, player)
 
 
@@ -223,6 +353,7 @@ def filter_safe_root_moves(
     from ai.strategy import (
         detect_style_phase,
         move_creates_double_home_gap,
+        move_worsens_flank_defense,
         premature_wing_advance,
     )
 
@@ -242,6 +373,8 @@ def filter_safe_root_moves(
             premature_wing_advance(board, player, move)
             or move_creates_double_home_gap(board, player, move)
         ):
+            continue
+        if move_worsens_flank_defense(board, player, move):
             continue
         safe.append(move)
 
@@ -424,9 +557,13 @@ def find_breakthrough_lane_move(board: Board, player: Player) -> Move | None:
     """Przebój słabym skrzydłem przeciwnika w stronę mety."""
     from ai.strategy import (
         move_targets_weak_flank,
+        needs_flank_defense,
         opponent_wins_race_if_ignored,
         weak_flank_breakthrough_ready,
     )
+
+    if needs_flank_defense(board, player):
+        return None
 
     legal = filter_safe_root_moves(board, player, board.get_legal_moves(player))
     if not legal:

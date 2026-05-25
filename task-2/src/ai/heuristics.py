@@ -77,7 +77,8 @@ def _phase_weights(phase: GamePhase) -> Dict[str, float]:
         weights["attack_threats"] *= 0.2
         weights["material"] *= 0.3
         weights["center_advancement"] *= 1.2
-        weights["flank_guard"] *= 2.5
+        weights["flank_guard"] *= 2.8
+        weights["defend_our_flanks"] *= 3.5
     elif phase == "maneuvering":
         # Gra środkowa: napięcie, łańcuchy; centrum już mniej ważne niż groźby.
         weights["mobility"] *= 2.0
@@ -93,8 +94,8 @@ def _phase_weights(phase: GamePhase) -> Dict[str, float]:
         weights["wing_vacancy"] *= 0.5
         weights["center_diagonal_setup"] *= 0.4
         weights["flank_guard"] *= 1.5
-        weights["defend_our_flanks"] *= 2.0
-        weights["weak_flank_attack"] *= 1.2
+        weights["defend_our_flanks"] *= 2.8
+        weights["weak_flank_attack"] *= 0.85
     elif phase == "attack":
         # Atak: bicia, przełamanie, zatory — nie dalsze „budowanie” centrum.
         weights["advancement"] *= 1.8
@@ -489,6 +490,8 @@ def flank_guard_heuristic(board: Board, perspective: Player) -> float:
 
 def defend_our_flanks_heuristic(board: Board, perspective: Player) -> float:
     """Kara za odsłonięte nasze skrzydło; premia gdy blokujemy autostradę przeciwnika."""
+    from ai.strategy import opponent_flank_race_pressure
+
     edge = edge_columns(board)
     guard = flank_guard_columns(board)
     opponent = get_opponent(perspective)
@@ -502,14 +505,23 @@ def defend_our_flanks_heuristic(board: Board, perspective: Player) -> float:
         open_edge = sum(
             1 for row in range(board.rows) if board.grid[row][edge_col] in {"_", "o"}
         )
-        my_guard = sum(1 for _r, c in _piece_positions(board, perspective.symbol) if c in guard)
-        opp_threat = sum(1 for _r, c in _piece_positions(board, opponent.symbol) if c in cols)
+        my_guard = sum(
+            1 for _r, c in _piece_positions(board, perspective.symbol) if c in guard
+        )
+        for row, col in _piece_positions(board, opponent.symbol):
+            if col not in cols:
+                continue
+            dist = abs(row - opponent.goal_row)
+            if dist <= 4:
+                opp_score += (5 - dist) * 2.2
+            if col == edge_col:
+                opp_score += 3.0
 
         if open_edge >= board.rows // 2:
-            my_score -= open_edge * 1.5
-        my_score += my_guard * 0.5
-        opp_score += opp_threat * 0.4
+            my_score -= open_edge * 2.2
+        my_score += my_guard * 0.8
 
+    my_score -= opponent_flank_race_pressure(board, perspective) * 0.35
     return float(my_score - opp_score)
 
 

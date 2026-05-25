@@ -197,6 +197,160 @@ def opponent_wins_race_if_ignored(board: Board, perspective: Player) -> bool:
     return opp_distance + 1 < my_distance
 
 
+def flank_column_set(board: Board, side: str) -> set[int]:
+    if board.cols < 2:
+        return {0} if side == "left" else {board.cols - 1}
+    if side == "left":
+        return {0, 1}
+    return {board.cols - 2, board.cols - 1}
+
+
+def opponent_flank_race_pressure(board: Board, perspective: Player) -> float:
+    """Im wyżej, tym bardziej przeciwnik jedzie autostradą bokiem do mety."""
+    from players.players import get_opponent
+
+    opponent = get_opponent(perspective)
+    pressure = 0.0
+    for side in ("left", "right"):
+        cols = flank_column_set(board, side)
+        edge_col = min(cols) if side == "left" else max(cols)
+        open_edge = sum(
+            1
+            for row in range(board.rows)
+            if board.grid[row][edge_col] in {"_", "o"}
+        )
+        if open_edge >= board.rows // 2:
+            pressure += open_edge * 0.55
+
+        for row, col in _piece_positions(board, opponent.symbol):
+            if col not in cols:
+                continue
+            dist = abs(row - opponent.goal_row)
+            progress = max(0, board.rows - dist)
+            pressure += progress * 1.15
+            if col == edge_col:
+                pressure += 2.5
+            cleared = 0
+            scan = row + opponent.direction
+            while 0 <= scan < board.rows:
+                cell = board.grid[scan][edge_col]
+                if cell in {"_", "o"}:
+                    cleared += 1
+                    scan += opponent.direction
+                elif cell == opponent.symbol:
+                    scan += opponent.direction
+                else:
+                    break
+            pressure += cleared * 2.0
+    return pressure
+
+
+def opponent_piece_on_flank_near_goal(board: Board, perspective: Player) -> bool:
+    from players.players import get_opponent
+
+    opponent = get_opponent(perspective)
+    for side in ("left", "right"):
+        cols = flank_column_set(board, side)
+        for row, col in _piece_positions(board, opponent.symbol):
+            if col in cols and abs(row - opponent.goal_row) <= 4:
+                return True
+    return False
+
+
+def needs_flank_defense(board: Board, perspective: Player) -> bool:
+    """Przeciwnik realnie grozi wejściem bokiem — trzeba blokować, nie iść w centrum."""
+    if not opponent_piece_on_flank_near_goal(board, perspective):
+        return False
+    return opponent_flank_race_pressure(board, perspective) >= 6.0
+
+
+def primary_threat_flank_side(board: Board, perspective: Player) -> str:
+    """Które skrzydło przeciwnik najmocniej naciska."""
+    from players.players import get_opponent
+
+    opponent = get_opponent(perspective)
+    left_score = 0.0
+    right_score = 0.0
+    for row, col in _piece_positions(board, opponent.symbol):
+        progress = board.rows - abs(row - opponent.goal_row)
+        if col <= 1:
+            left_score += progress + (2.0 if col == 0 else 0.0)
+        elif col >= board.cols - 2:
+            right_score += progress + (2.0 if col == board.cols - 1 else 0.0)
+    return "left" if left_score >= right_score else "right"
+
+
+def threatened_flank_columns(board: Board, perspective: Player) -> set[int]:
+    return flank_column_set(board, primary_threat_flank_side(board, perspective))
+
+
+def flank_pressure_after_move(board: Board, player: Player, move: Move) -> float:
+    trial = Board([row[:] for row in board.grid])
+    trial.apply_move(move, player)
+    return opponent_flank_race_pressure(trial, player)
+
+
+def move_improves_flank_defense(board: Board, player: Player, move: Move) -> bool:
+    before = opponent_flank_race_pressure(board, player)
+    after = flank_pressure_after_move(board, player, move)
+    return after + 0.4 < before
+
+
+def move_worsens_flank_defense(board: Board, player: Player, move: Move) -> bool:
+    if not needs_flank_defense(board, player):
+        return False
+    if move.is_capture or move.to_row == player.goal_row:
+        return False
+    before = opponent_flank_race_pressure(board, player)
+    after = flank_pressure_after_move(board, player, move)
+    return after > before + 0.6
+
+
+def find_defend_flank_move(board: Board, player: Player) -> Move | None:
+    """Blokada / odcięcie przejścia bokiem, gdy przeciwnik jedzie skrzydłem do mety."""
+    if not needs_flank_defense(board, player):
+        return None
+
+    from ai.tactics import copy_board, filter_safe_root_moves, goal_progress_score
+
+    before = opponent_flank_race_pressure(board, player)
+    flank_cols = threatened_flank_columns(board, player)
+    legal = filter_safe_root_moves(
+        board, player, list(board.get_legal_moves(player)), protect_wing_structure=True
+    )
+    if not legal:
+        return None
+
+    def rank(move: Move) -> tuple:
+        trial = copy_board(board)
+        trial.apply_move(move, player)
+        reduction = before - opponent_flank_race_pressure(trial, player)
+        on_lane = move.to_col in flank_cols
+        return (
+            1 if trial.has_player_won(player) else 0,
+            1 if move.is_capture and move.to_col in flank_cols else 0,
+            reduction,
+            1 if on_lane else 0,
+            1 if on_lane and move_improves_flank_defense(board, player, move) else 0,
+            goal_progress_score(move, player) if move.is_capture else 0,
+        )
+
+    on_threat_lane = [move for move in legal if move.to_col in flank_cols]
+    if not on_threat_lane:
+        return None
+
+    improving = [
+        move
+        for move in on_threat_lane
+        if move_improves_flank_defense(board, player, move)
+        or move.is_capture
+    ]
+    if improving:
+        return max(improving, key=rank)
+
+    return max(on_threat_lane, key=rank)
+
+
 def flank_lane_strength(board: Board, perspective: Player, side: str) -> float:
     """Im niżej, tym słabsza obrona przeciwnika na tym skrzydle (łatwiejszy przebój)."""
     from players.players import get_opponent
@@ -318,6 +472,17 @@ def move_priority(board: Board, move: Move, player: Player, phase: StylePhase) -
         board, move.to_col
     )
 
+    if needs_flank_defense(board, player):
+        if move_improves_flank_defense(board, player, move):
+            priority += 140
+        if move.to_col in edge_cols or move.to_col in guard_cols:
+            priority += 70
+        if move.is_capture and (move.to_col in edge_cols or move.to_col in guard_cols):
+            priority += 100
+        if forward > 0 and move.to_col not in edge_cols and move.to_col not in guard_cols:
+            if move.to_col in center:
+                priority -= 100
+
     if phase == "opening":
         # Puste tylko kolumny 0 i ostatnia; jedno skrzydło naraz, max 1 luka w linii tylnej.
         if move.from_col in edge_cols and move.to_col in guard_cols:
@@ -331,9 +496,11 @@ def move_priority(board: Board, move: Move, player: Player, phase: StylePhase) -
         if is_center_diagonal_opening_move(board, move, player):
             priority += 65
         if move.from_col in edge_cols and move.to_col in edge_cols:
-            priority -= 120
+            priority -= 140
         if forward > 0 and move.from_col in edge_cols:
-            priority -= 90
+            priority -= 110
+        if forward > 0 and move.to_col in edge_cols:
+            priority -= 130
         if premature_wing_advance(board, player, move):
             priority -= 150
         if move_creates_double_home_gap(board, player, move):

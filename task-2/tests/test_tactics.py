@@ -6,13 +6,17 @@ from _setup import Runner
 from _positions import capture_or_lose_board
 from engine.board import Board, Move
 from players.players import FirstPlayer, SecondPlayer
+from ai.strategy import find_defend_flank_move, needs_flank_defense
 from ai.tactics import (
     find_best_capture,
     find_forced_win_move,
+    find_preemptive_threat_capture,
     get_free_captures,
     get_good_captures,
     is_capture_trap,
     is_free_capture,
+    is_hanging_piece_at,
+    list_hanging_squares,
     move_exposes_hanging_piece,
 )
 from ai.tournament_search import choose_tournament_move
@@ -60,6 +64,71 @@ def run(runner: Runner | None = None) -> Runner:
     runner.check(
         move_exposes_hanging_piece(hang_board, FirstPlayer(), hang_move),
         "forward onto capturable square should be flagged as hanging",
+    )
+
+    # W zagrożeniu: zbić pion przeciwnika zamiast iść do przodu.
+    threat_lines = [
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "_ _ B _ _ _ _ _",
+        "_ _ _ W _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+    ]
+    threat_board = Board.from_lines(threat_lines)
+    b = FirstPlayer()
+    runner.check(
+        is_hanging_piece_at(threat_board, b, 3, 2),
+        "B at (3,2) should be hanging under W threat",
+    )
+    pre = find_preemptive_threat_capture(threat_board, b)
+    runner.check(
+        pre is not None
+        and pre.is_capture
+        and pre.from_row == 3
+        and pre.from_col == 2
+        and pre.to_row == 4
+        and pre.to_col == 3,
+        f"preemptive capture of threat, got {pre}",
+    )
+    tm, _, _ = choose_tournament_move(
+        threat_board, b, time_limit_s=0.5, use_opening_book=False
+    )
+    runner.check(
+        tm is not None and tm.is_capture and tm.to_row == 4 and tm.to_col == 3,
+        f"tournament should capture threat W, got {tm}",
+    )
+
+    # Przeciwnik jedzie lewym skrzydłem — bot blokuje kolumnę 0/1 zamiast centrum.
+    flank_lines = [
+        "_ W _ _ _ _ _ _",
+        "W _ _ _ _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "B B B B B B B B",
+        "_ _ _ _ _ _ _ _",
+    ]
+    flank_board = Board.from_lines(flank_lines)
+    b_flank = FirstPlayer()
+    runner.check(
+        needs_flank_defense(flank_board, b_flank),
+        "opponent wing run should trigger flank defense",
+    )
+    defend = find_defend_flank_move(flank_board, b_flank)
+    runner.check(
+        defend is not None and defend.to_col in {0, 1},
+        f"flank defense should use col 0/1, got {defend}",
+    )
+    fm, _, _ = choose_tournament_move(
+        flank_board, b_flank, time_limit_s=0.5, use_opening_book=False
+    )
+    runner.check(
+        fm is not None and fm.to_col in {0, 1, 2},
+        f"tournament should block flank, got {fm}",
     )
 
     # Proste bicie w końcówce nie jest pułapką.

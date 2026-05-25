@@ -13,6 +13,7 @@ from ai.minimax import choose_best_move_timed
 from ai.mcts import mcts_choose_move
 from ai.opening_book import lookup_opening_move
 from ai.strategy import has_capture_moves, order_moves
+from ai.strategy import find_defend_flank_move, needs_flank_defense
 from ai.tactics import (
     filter_safe_root_moves,
     find_block_opponent_win,
@@ -20,6 +21,7 @@ from ai.tactics import (
     find_forced_win_move,
     find_immediate_win,
     find_mandatory_capture,
+    find_preemptive_threat_capture,
     get_free_captures,
     is_goal_race,
     prioritize_tactical_moves,
@@ -52,7 +54,7 @@ def _fast_fallback_move(board: Board, player: Player) -> Move:
     cap = find_mandatory_capture(board, player)
     if cap is not None:
         return cap
-    safe = filter_safe_root_moves(board, player, legal, protect_wing_structure=False)
+    safe = filter_safe_root_moves(board, player, legal, protect_wing_structure=True)
     pool = safe if safe else legal
     ordered = prioritize_tactical_moves(pool, board=board, player=player)
     ordered = order_moves(board, ordered, player, heuristic_name="breakthrough")
@@ -96,6 +98,15 @@ def choose_tournament_move(
         if block_move is not None:
             return out(block_move)
 
+    threat_cap = find_preemptive_threat_capture(board, player)
+    if threat_cap is not None:
+        return out(threat_cap)
+
+    if tactical_layers:
+        flank_defense = find_defend_flank_move(board, player)
+        if flank_defense is not None:
+            return out(flank_defense)
+
     capture_move = find_mandatory_capture(board, player)
     if capture_move is not None and (
         get_free_captures(board, player) or _seconds_left(deadline) > 0.04
@@ -103,7 +114,10 @@ def choose_tournament_move(
         return out(capture_move)
 
     if use_opening_book and _seconds_left(deadline) > 0.05:
-        if not tactical_layers or not should_skip_opening_book(board, player):
+        if not tactical_layers or (
+            not should_skip_opening_book(board, player)
+            and not needs_flank_defense(board, player)
+        ):
             book_move = lookup_opening_move(board, player)
             if book_move is not None:
                 return out(book_move)
