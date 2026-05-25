@@ -25,8 +25,8 @@ from players.players import FirstPlayer, Player, SecondPlayer, get_opponent
 STATIC = ROOT / "static"
 HOST = "127.0.0.1"
 PORT = 8765
-MOVE_TIME_BUDGET_S = 0.48
-MAX_SEARCH_DEPTH = 5
+MOVE_TIME_BUDGET_S = 0.58
+MAX_SEARCH_DEPTH = 6
 
 _game: dict[str, Any] | None = None
 
@@ -134,6 +134,8 @@ def _bot_move(board: Board, bot: Player, genome: Any) -> Move | None:
             time_limit_s=MOVE_TIME_BUDGET_S,
             max_depth=MAX_SEARCH_DEPTH,
             heuristic_name="breakthrough",
+            use_opening_book=True,
+            use_tactical_layers=True,
         )
     finally:
         if token is not None:

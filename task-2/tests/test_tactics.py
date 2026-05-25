@@ -6,17 +6,29 @@ from _setup import Runner
 from _positions import capture_or_lose_board
 from engine.board import Board, Move
 from players.players import FirstPlayer, SecondPlayer
-from ai.strategy import find_defend_flank_move, needs_flank_defense
+from ai.strategy import (
+    find_defend_flank_move,
+    move_creates_same_color_wall,
+    needs_flank_defense,
+    row_same_parity_cluster,
+)
 from ai.tactics import (
+    capture_non_worsening_in_2ply,
+    capture_exchange_balance,
     find_best_capture,
     find_forced_win_move,
     find_preemptive_threat_capture,
+    find_profitable_capture_move,
+    find_stop_free_gift_capture,
+    move_creates_free_gift_for_opponent,
     get_free_captures,
     get_good_captures,
     is_capture_trap,
     is_free_capture,
     is_hanging_piece_at,
+    is_profitable_capture,
     list_hanging_squares,
+    list_threatened_squares,
     move_exposes_hanging_piece,
 )
 from ai.tournament_search import choose_tournament_move
@@ -99,6 +111,95 @@ def run(runner: Runner | None = None) -> Runner:
     runner.check(
         tm is not None and tm.is_capture and tm.to_row == 4 and tm.to_col == 3,
         f"tournament should capture threat W, got {tm}",
+    )
+
+    # Przeciwnik może zbić za darmo — bot musi zbić W.
+    gift_lines = [
+        "B B B B B B B B",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ B _ _ _ _",
+        "_ _ _ _ W _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "W W W W W W W W",
+    ]
+    gift_board = Board.from_lines(gift_lines)
+    b_gift = FirstPlayer()
+    gift_cap = find_stop_free_gift_capture(gift_board, b_gift)
+    runner.check(
+        gift_cap is not None and gift_cap.is_capture,
+        f"should capture before free gift, got {gift_cap}",
+    )
+
+    # Wymiana niechronionym: B bije W (1:1), inaczej traci pion.
+    trade_lines = [
+        "B B B B B B B B",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ B _ _ _ _",
+        "_ _ _ _ W _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "W W W W W W W W",
+    ]
+    trade_board = Board.from_lines(trade_lines)
+    b_trade = FirstPlayer()
+    cap = find_profitable_capture_move(trade_board, b_trade)
+    runner.check(
+        cap is not None and cap.is_capture and cap.to_row == 5 and cap.to_col == 4,
+        f"unprotected trade capture, got {cap}",
+    )
+    runner.check(
+        capture_exchange_balance(trade_board, b_trade, cap) >= 0,
+        "exchange should be even or better",
+    )
+    runner.check(
+        capture_non_worsening_in_2ply(trade_board, b_trade, cap),
+        "forced capture should pass 2-ply material gate",
+    )
+    lose_after_cap_lines = [
+        "_ _ _ _ _ _ _ _",
+        "_ W _ _ _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ B _ _ _ _",
+        "_ _ _ _ W _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+    ]
+    lose_after_cap_board = Board.from_lines(lose_after_cap_lines)
+    lose_cap = Move(4, 3, 5, 4, True)
+    runner.check(
+        not capture_non_worsening_in_2ply(lose_after_cap_board, FirstPlayer(), lose_cap),
+        "capture should fail 2-ply gate when opponent wins next",
+    )
+    # „Ochrona” z tyłu, ale W i tak może zbić — bot bierze W zamiast stać.
+    protected_lines = [
+        "B B B B B B B B",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ B _ _ _ _",
+        "_ _ _ B W _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "_ _ _ _ _ _ _ _",
+        "W W W W W W W W",
+    ]
+    prot_board = Board.from_lines(protected_lines)
+    b_prot = FirstPlayer()
+    runner.check(
+        len(list_threatened_squares(prot_board, b_prot)) >= 1,
+        "supported pawn still under capture threat",
+    )
+    runner.check(
+        len(list_hanging_squares(prot_board, b_prot)) == 0
+        or len(list_threatened_squares(prot_board, b_prot)) >= 1,
+        "threatened vs hanging distinction",
+    )
+    pre_prot = find_preemptive_threat_capture(prot_board, b_prot)
+    runner.check(
+        pre_prot is not None and pre_prot.is_capture and pre_prot.to_row == 4 and pre_prot.to_col == 4,
+        f"should capture approaching W despite back support, got {pre_prot}",
     )
 
     # Przeciwnik jedzie lewym skrzydłem — bot blokuje kolumnę 0/1 zamiast centrum.

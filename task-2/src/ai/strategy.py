@@ -3,7 +3,7 @@
 from typing import List
 
 from engine.board import Board, Move
-from players.players import Player
+from players.players import Player, get_opponent
 
 def _piece_positions(board: Board, symbol: str) -> List[tuple[int, int]]:
     positions: List[tuple[int, int]] = []
@@ -90,6 +90,273 @@ def max_home_rank_gaps(board: Board, player: Player) -> int:
         ),
         default=0,
     )
+
+
+def square_parity(row: int, col: int) -> int:
+    return (row + col) % 2
+
+
+def row_occupied_single_parity(
+    board: Board, player: Player, row: int, *, min_pawns: int = 2
+) -> bool:
+    """W rzędzie są piony wyłącznie na jasnych lub wyłącznie na ciemnych polach."""
+    if not (0 <= row < board.rows):
+        return False
+    parities: set[int] = set()
+    count = 0
+    for col in range(board.cols):
+        if board.grid[row][col] != player.symbol:
+            continue
+        count += 1
+        parities.add(square_parity(row, col))
+    return count >= min_pawns and len(parities) == 1
+
+
+def row_same_parity_cluster(
+    board: Board, player: Player, row: int, *, min_count: int = 3
+) -> bool:
+    """Za dużo pionów w jednym rzędzie tylko na jasnych lub tylko na ciemnych polach."""
+    if not (0 <= row < board.rows):
+        return False
+    light = 0
+    dark = 0
+    for col in range(board.cols):
+        if board.grid[row][col] != player.symbol:
+            continue
+        if square_parity(row, col) == 0:
+            light += 1
+        else:
+            dark += 1
+    return (dark >= min_count and light == 0) or (light >= min_count and dark == 0)
+
+
+def _lane_rows_between(from_row: int, to_row: int, direction: int) -> List[int]:
+    if direction > 0:
+        if to_row <= from_row:
+            return []
+        return list(range(from_row + 1, to_row + 1))
+    if to_row >= from_row:
+        return []
+    return list(range(from_row - 1, to_row - 1, -1))
+
+
+def lane_blocked_by_us(
+    board: Board, player: Player, col: int, from_row: int, to_row: int
+) -> bool:
+    """Czy po drodze do mety stoi nasz pion w pasie (col±1)."""
+    opponent = get_opponent(player)
+    for row in _lane_rows_between(from_row, to_row, opponent.direction):
+        for ncol in (col - 1, col, col + 1):
+            if 0 <= ncol < board.cols and board.grid[row][ncol] == player.symbol:
+                return True
+    return False
+
+
+def opponent_has_clear_lane_to_goal(board: Board, player: Player) -> bool:
+    """Przeciwnik ma wolną drogę do mety w swoim pasie (bez naszych pionów przed nim)."""
+    opponent = get_opponent(player)
+    for row, col in _piece_positions(board, opponent.symbol):
+        if not lane_blocked_by_us(board, player, col, row, opponent.goal_row):
+            return True
+    return False
+
+
+def _ordered_opponent_moves(board: Board, opponent: Player, limit: int = 16) -> List[Move]:
+    moves = board.get_legal_moves(opponent)
+    moves.sort(
+        key=lambda move: (
+            move.is_capture,
+            1 if move.to_row == opponent.goal_row else 0,
+            abs(move.to_row - opponent.goal_row) * -1,
+        ),
+        reverse=True,
+    )
+    return moves[:limit]
+
+
+def our_single_parity_ratio(board: Board, player: Player) -> float:
+    """Ułamek pionów na dominującym kolorze pola (1.0 = wszystkie na jednym)."""
+    light = 0
+    dark = 0
+    for row, col in _piece_positions(board, player.symbol):
+        if square_parity(row, col) == 0:
+            light += 1
+        else:
+            dark += 1
+    total = light + dark
+    if total == 0:
+        return 0.0
+    return max(light, dark) / total
+
+
+def staircase_single_parity_formation(board: Board, player: Player) -> bool:
+    """Kilka rzędów pod rząd — piony tylko na jednym kolorze (autostrada po skosie)."""
+    streak = 0
+    for row in range(board.rows):
+        if row_occupied_single_parity(board, player, row, min_pawns=2):
+            streak += 1
+            if streak >= 2:
+                return True
+        else:
+            streak = 0
+    return False
+
+
+def opponent_can_reach_goal_without_capture(
+    board: Board, player: Player, *, max_ply: int = 10
+) -> bool:
+    """Czy przeciwnik może dojść do mety samymi ruchami cichymi (po skosach bez bić)."""
+    opponent = get_opponent(player)
+    if board.has_player_won(opponent):
+        return True
+
+    stack: List[tuple[Board, int]] = [(board, 0)]
+    seen: set[int] = set()
+    checked = 0
+    limit = 120
+
+    while stack and checked < limit:
+        state, depth = stack.pop()
+        state_key = hash(tuple(tuple(row) for row in state.grid))
+        if state_key in seen:
+            continue
+        seen.add(state_key)
+        checked += 1
+
+        if state.has_player_won(opponent):
+            return True
+        if depth >= max_ply:
+            continue
+
+        for move in _ordered_opponent_moves(state, opponent, limit=14):
+            if move.is_capture:
+                continue
+            child = Board([row[:] for row in state.grid])
+            child.apply_move(move, opponent)
+            stack.append((child, depth + 1))
+
+    return False
+
+
+def quick_diagonal_highway_risk(board: Board, player: Player) -> bool:
+    return (
+        opponent_has_clear_lane_to_goal(board, player)
+        or (
+            our_single_parity_ratio(board, player) >= 0.68
+            and staircase_single_parity_formation(board, player)
+        )
+    )
+
+
+def opponent_diagonal_highway_threat(
+    board: Board, player: Player, *, lookahead: int = 4
+) -> bool:
+    """
+    Układ na jednym kolorze pól + przeciwnik może przejść do mety bez bicia.
+    """
+    if opponent_has_clear_lane_to_goal(board, player):
+        return True
+    if not quick_diagonal_highway_risk(board, player):
+        return False
+    return opponent_can_reach_goal_without_capture(board, player, max_ply=lookahead + 1)
+
+
+def opponent_clear_lane_threat_in_n_moves(
+    board: Board, player: Player, opponent_moves: int = 3
+) -> bool:
+    """
+    Czy przeciwnik w <=N swoich ruchach może mieć wolny bieg do mety
+    (przed pionem brak naszych blokad w pasie).
+    """
+    if opponent_has_clear_lane_to_goal(board, player):
+        return True
+    if opponent_moves <= 0:
+        return False
+
+    opponent = get_opponent(player)
+    stack: List[tuple[Board, int]] = [(board, 0)]
+    seen: set[tuple] = set()
+    states_checked = 0
+    max_states = 220
+
+    while stack and states_checked < max_states:
+        state, depth = stack.pop()
+        key = (tuple(tuple(row) for row in state.grid), depth)
+        if key in seen:
+            continue
+        seen.add(key)
+        states_checked += 1
+
+        if opponent_has_clear_lane_to_goal(state, player):
+            return True
+        if state.has_player_won(opponent):
+            return True
+        if depth >= opponent_moves:
+            continue
+
+        for move in _ordered_opponent_moves(state, opponent):
+            child = Board([row[:] for row in state.grid])
+            child.apply_move(move, opponent)
+            stack.append((child, depth + 1))
+
+    return False
+
+
+def lattice_open_lane_score(board: Board, player: Player) -> float:
+    """
+    Kara za „autostradę”: piony tylko na jednym kolorze pól,
+    przeciwnik może iść po skosach / drugim kolorze bez bicia.
+    """
+    opponent = get_opponent(player)
+    penalty = 0.0
+    ratio = our_single_parity_ratio(board, player)
+    if ratio >= 0.65:
+        penalty += (ratio - 0.5) * 10.0
+    if staircase_single_parity_formation(board, player):
+        penalty += 5.0
+    if opponent_can_reach_goal_without_capture(board, player, max_ply=10):
+        penalty += 12.0
+    for row in range(board.rows):
+        if not row_same_parity_cluster(board, player, row, min_count=3):
+            if not row_occupied_single_parity(board, player, row, min_pawns=2):
+                continue
+        penalty += 4.0
+        for col in range(board.cols):
+            if board.grid[row][col] != player.symbol:
+                continue
+            parity = square_parity(row, col)
+            for next_row in (row + opponent.direction,):
+                if not (0 <= next_row < board.rows):
+                    continue
+                for next_col in range(board.cols):
+                    if square_parity(next_row, next_col) == parity:
+                        continue
+                    if board.grid[next_row][next_col] in {"_", "o"}:
+                        penalty += 0.35
+    return -penalty
+
+
+def move_creates_same_color_wall(board: Board, player: Player, move: Move) -> bool:
+    """Cichy ruch pogarsza siatkę (jeden kolor pól) lub otwiera bieg bez bicia."""
+    if move.is_capture or move.to_row == player.goal_row:
+        return False
+    trial = Board([row[:] for row in board.grid])
+    trial.apply_move(move, player)
+    for row in (move.to_row, move.from_row):
+        if row_same_parity_cluster(trial, player, row, min_count=3):
+            return True
+        if row_occupied_single_parity(trial, player, row, min_pawns=2):
+            if our_single_parity_ratio(trial, player) >= 0.7:
+                return True
+    behind = move.to_row - player.direction
+    if 0 <= behind < trial.rows and row_same_parity_cluster(
+        trial, player, behind, min_count=3
+    ):
+        return True
+    if not opponent_can_reach_goal_without_capture(board, player, max_ply=8):
+        if opponent_can_reach_goal_without_capture(trial, player, max_ply=8):
+            return True
+    return False
 
 
 def move_creates_double_home_gap(board: Board, player: Player, move: Move) -> bool:
@@ -311,13 +578,29 @@ def find_defend_flank_move(board: Board, player: Player) -> Move | None:
     if not needs_flank_defense(board, player):
         return None
 
-    from ai.tactics import copy_board, filter_safe_root_moves, goal_progress_score
+    from ai.tactics import (
+        copy_board,
+        goal_progress_score,
+        move_allows_opponent_win_in_one,
+        move_exposes_hanging_piece,
+    )
 
     before = opponent_flank_race_pressure(board, player)
     flank_cols = threatened_flank_columns(board, player)
-    legal = filter_safe_root_moves(
-        board, player, list(board.get_legal_moves(player)), protect_wing_structure=True
-    )
+    legal = []
+    fallback_legal = []
+    all_legal = list(board.get_legal_moves(player))
+    for move in all_legal:
+        if move_allows_opponent_win_in_one(board, player, move):
+            continue
+        fallback_legal.append(move)
+        if not move.is_capture and move_exposes_hanging_piece(board, player, move):
+            continue
+        legal.append(move)
+    if not fallback_legal:
+        fallback_legal = all_legal
+    if not legal:
+        legal = fallback_legal
     if not legal:
         return None
 
@@ -471,6 +754,9 @@ def move_priority(board: Board, move: Move, player: Player, phase: StylePhase) -
     inward = _col_distance_to_center(board, move.from_col) - _col_distance_to_center(
         board, move.to_col
     )
+
+    if move_creates_same_color_wall(board, player, move):
+        priority -= 160
 
     if needs_flank_defense(board, player):
         if move_improves_flank_defense(board, player, move):

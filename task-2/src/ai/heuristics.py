@@ -84,8 +84,9 @@ def _phase_weights(phase: GamePhase) -> Dict[str, float]:
         weights["mobility"] *= 2.0
         weights["center_advancement"] *= 1.2
         weights["active_pieces"] *= 1.6
-        weights["chain_support"] *= 2.2
+        weights["chain_support"] *= 2.8
         weights["attack_threats"] *= 2.0
+        weights["suicidal_exposure"] *= 2.5
         weights["harmonious_development"] *= 1.0
         weights["isolated_lead"] *= 1.2
         weights["advancement"] *= 0.9
@@ -304,6 +305,8 @@ def bottleneck_heuristic(board: Board, perspective: Player) -> float:
 
 
 def chain_support_heuristic(board: Board, perspective: Player) -> float:
+    from ai.strategy import lattice_open_lane_score
+
     my_chains = 0
     opp_chains = 0
     opponent = get_opponent(perspective)
@@ -328,7 +331,10 @@ def chain_support_heuristic(board: Board, perspective: Player) -> float:
                     opp_chains += 1
                     break
 
-    return float(my_chains - opp_chains)
+    score = float(my_chains - opp_chains)
+    score += lattice_open_lane_score(board, perspective) * 1.8
+    score -= lattice_open_lane_score(board, opponent) * 0.6
+    return score
 
 
 def _opponent_attack_targets(board: Board, attacker_row: int, attacker_col: int, attacker: Player) -> List[tuple[int, int]]:

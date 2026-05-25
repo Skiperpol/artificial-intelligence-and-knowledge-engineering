@@ -13,15 +13,25 @@ from ai.minimax import choose_best_move_timed
 from ai.mcts import mcts_choose_move
 from ai.opening_book import lookup_opening_move
 from ai.strategy import has_capture_moves, order_moves
-from ai.strategy import find_defend_flank_move, needs_flank_defense
+from ai.strategy import (
+    find_defend_flank_move,
+    needs_flank_defense,
+    opponent_has_clear_lane_to_goal,
+    quick_diagonal_highway_risk,
+)
 from ai.tactics import (
+    closest_goal_distance,
     filter_safe_root_moves,
+    find_block_opponent_lane_threat,
     find_block_opponent_win,
     find_breakthrough_lane_move,
     find_forced_win_move,
     find_immediate_win,
+    find_free_capture_move,
     find_mandatory_capture,
+    find_profitable_capture_move,
     find_preemptive_threat_capture,
+    find_stop_free_gift_capture,
     get_free_captures,
     is_goal_race,
     prioritize_tactical_moves,
@@ -98,20 +108,31 @@ def choose_tournament_move(
         if block_move is not None:
             return out(block_move)
 
+    if tactical_layers and _seconds_left(deadline) > 0.18:
+        if opponent_has_clear_lane_to_goal(board, player) or quick_diagonal_highway_risk(
+            board, player
+        ):
+            lane_block = find_block_opponent_lane_threat(board, player, lookahead=2)
+            if lane_block is not None:
+                return out(lane_block)
+
+    gift_cap = find_stop_free_gift_capture(board, player)
+    if gift_cap is not None:
+        return out(gift_cap)
+
     threat_cap = find_preemptive_threat_capture(board, player)
     if threat_cap is not None:
         return out(threat_cap)
 
-    if tactical_layers:
+    if tactical_layers and _seconds_left(deadline) > 0.24:
         flank_defense = find_defend_flank_move(board, player)
         if flank_defense is not None:
             return out(flank_defense)
 
-    capture_move = find_mandatory_capture(board, player)
-    if capture_move is not None and (
-        get_free_captures(board, player) or _seconds_left(deadline) > 0.04
-    ):
-        return out(capture_move)
+    free_capture = find_free_capture_move(board, player)
+    if free_capture is not None:
+        return out(free_capture)
+
 
     if use_opening_book and _seconds_left(deadline) > 0.05:
         if not tactical_layers or (
@@ -124,13 +145,13 @@ def choose_tournament_move(
 
     race = is_goal_race(board, player)
 
-    if tactical_layers and _seconds_left(deadline) > 0.12:
-        if race and total_pieces(board) <= 16:
+    if tactical_layers and _seconds_left(deadline) > 0.1:
+        if race and closest_goal_distance(board, player) <= 3 and total_pieces(board) <= 14:
             forced_win = find_forced_win_move(
                 board,
                 player,
-                max_depth=5,
-                deadline=start + min(0.12, time_limit_s * 0.25),
+                max_depth=4,
+                deadline=start + min(0.08, time_limit_s * 0.15),
             )
             if forced_win is not None:
                 return out(forced_win)
@@ -178,20 +199,19 @@ def choose_tournament_move(
             visited += mcts_sims
         remaining = _seconds_left(deadline)
 
-    search_depth = min(max_depth, 5)
-    if race:
-        search_depth = min(max_depth, 6)
+    search_depth = min(max_depth, 6)
+    min_depth = 3 if remaining > 0.22 else 2
 
-    if remaining > 0.08:
+    if remaining > 0.06:
         search = choose_best_move_timed(
             board=board,
             player=player,
             heuristic_name=heuristic_name,
-            time_limit_s=max(0.05, remaining - 0.03),
+            time_limit_s=max(0.06, remaining - 0.06),
             max_depth=search_depth,
-            min_depth=2,
-            min_remaining_to_start_s=0.08,
-            use_quiescence=False,
+            min_depth=min_depth,
+            min_remaining_to_start_s=0.06,
+            use_quiescence=True,
             use_tactical_filter=tactical_layers,
             use_transposition=True,
         )

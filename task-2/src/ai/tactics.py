@@ -128,11 +128,89 @@ def is_capture_trap(board: Board, player: Player, move: Move) -> bool:
             continue
         if find_immediate_win(after, player) is not None:
             continue
-        if any(m.is_capture for m in after.get_legal_moves(player)):
-            continue
         return True
 
     return False
+
+
+def capture_exchange_balance(board: Board, player: Player, move: Move) -> int:
+    """
+    Bilans materiału po biciu i najlepszej odpowiedzi przeciwnika na polu lądowania.
+    >0 lepszy, 0 remis wymiany, <0 strata.
+    """
+    if not move.is_capture:
+        return -99
+    opponent = get_opponent(player)
+    before = (
+        board.count_pieces(player.symbol) - board.count_pieces(opponent.symbol)
+    )
+    trial = copy_board(board)
+    trial.apply_move(move, player)
+    if trial.has_player_won(player):
+        return 99
+    if opponent_can_win_next_turn(trial, player):
+        return -99
+
+    recaptures = _opponent_capture_moves_on(trial, player, move.to_row, move.to_col)
+    if not recaptures:
+        return 2
+
+    best_delta = -99
+    for opp_move in recaptures:
+        after = copy_board(trial)
+        after.apply_move(opp_move, opponent)
+        if after.has_player_won(opponent):
+            best_delta = max(best_delta, -99)
+            continue
+        after_balance = (
+            after.count_pieces(player.symbol) - after.count_pieces(opponent.symbol)
+        )
+        best_delta = max(best_delta, after_balance - before)
+    return best_delta
+
+
+def material_balance(board: Board, player: Player) -> int:
+    opponent = get_opponent(player)
+    return board.count_pieces(player.symbol) - board.count_pieces(opponent.symbol)
+
+
+def capture_non_worsening_in_2ply(board: Board, player: Player, move: Move) -> bool:
+    """
+    Czy wymuszone bicie nie pogarsza materiału po najlepszej odpowiedzi przeciwnika.
+    2-ply: nasz ruch (bicie) + ruch przeciwnika.
+    """
+    if not move.is_capture:
+        return False
+
+    before = material_balance(board, player)
+    after_us = copy_board(board)
+    after_us.apply_move(move, player)
+    if after_us.has_player_won(player):
+        return True
+
+    opponent = get_opponent(player)
+    opponent_moves = after_us.get_legal_moves(opponent)
+    if not opponent_moves:
+        return True
+
+    worst_after = inf
+    for opp_move in opponent_moves:
+        child = copy_board(after_us)
+        child.apply_move(opp_move, opponent)
+        if child.has_player_won(opponent):
+            return False
+        worst_after = min(worst_after, material_balance(child, player))
+
+    return worst_after >= before
+
+
+def is_profitable_capture(board: Board, player: Player, move: Move) -> bool:
+    """Bicie co najmniej remis w materiale (lub wygrana) — w tym wymiana niechronionym."""
+    if not move.is_capture:
+        return False
+    if is_free_capture(board, player, move):
+        return True
+    return capture_exchange_balance(board, player, move) >= 0
 
 
 def _capture_on_square_hurts_us(
@@ -151,8 +229,6 @@ def _capture_on_square_hurts_us(
             return True
         if find_immediate_win(after, player) is not None:
             continue
-        if get_good_captures(after, player):
-            continue
         if after.count_pieces(player.symbol) < pieces_before:
             return True
     return False
@@ -165,6 +241,18 @@ def is_hanging_piece_at(board: Board, player: Player, row: int, col: int) -> boo
     if _is_protected(board, row, col, player):
         return False
     return _capture_on_square_hurts_us(board, player, row, col)
+
+
+def list_threatened_squares(board: Board, player: Player) -> List[Tuple[int, int]]:
+    """Nasze pola, na które przeciwnik ma legalne bicie w następnej turze."""
+    threatened: List[Tuple[int, int]] = []
+    for row in range(board.rows):
+        for col in range(board.cols):
+            if board.grid[row][col] != player.symbol:
+                continue
+            if _opponent_capture_moves_on(board, player, row, col):
+                threatened.append((row, col))
+    return threatened
 
 
 def list_hanging_squares(board: Board, player: Player) -> List[Tuple[int, int]]:
@@ -219,43 +307,208 @@ def has_quiet_protection_for_hanging(
     return False
 
 
-def find_preemptive_threat_capture(board: Board, player: Player) -> Move | None:
-    """
-    Zbij pion zagrożenia, gdy mamy niechronionego własnego pionka
-    i w tej turze nie dodajemy ochrony cichym ruchem.
-    """
-    hanging = list_hanging_squares(board, player)
-    if not hanging:
+def list_opponent_free_captures_against_us(
+    board: Board, player: Player
+) -> List[Tuple[int, int, int, int]]:
+    """(nasz_row, nasz_col, atak_row, atak_col) — przeciwnik może zbić bez kary."""
+    opponent = get_opponent(player)
+    out: List[Tuple[int, int, int, int]] = []
+    for row in range(board.rows):
+        for col in range(board.cols):
+            if board.grid[row][col] != player.symbol:
+                continue
+            for opp_move in _opponent_capture_moves_on(board, player, row, col):
+                if is_free_capture(board, opponent, opp_move):
+                    out.append(
+                        (row, col, opp_move.from_row, opp_move.from_col)
+                    )
+    return out
+
+
+def move_is_strategic(board: Board, player: Player, move: Move) -> bool:
+    """Ruch uzasadniony mimo ryzyka (meta, zysk, blokada autostrady przeciwnika)."""
+    if move.to_row == player.goal_row:
+        return True
+    if move.is_capture and (
+        is_free_capture(board, player, move)
+        or is_profitable_capture(board, player, move)
+    ):
+        return True
+    trial = copy_board(board)
+    trial.apply_move(move, player)
+    if trial.has_player_won(player):
+        return True
+    if is_goal_race(board, player) and goal_progress_score(move, player) >= 2:
+        return True
+    from ai.strategy import (
+        opponent_clear_lane_threat_in_n_moves,
+        opponent_diagonal_highway_threat,
+    )
+
+    if opponent_clear_lane_threat_in_n_moves(
+        board, player, 3
+    ) and not opponent_clear_lane_threat_in_n_moves(trial, player, 2):
+        return True
+    if opponent_diagonal_highway_threat(board, player, lookahead=4) and not opponent_diagonal_highway_threat(
+        trial, player, lookahead=3
+    ):
+        return True
+    return False
+
+
+def move_creates_free_gift_for_opponent(
+    board: Board, player: Player, move: Move
+) -> bool:
+    """Po ruchu przeciwnik dostaje nowe darmowe bicie na nasz pion."""
+    if move.is_capture or move.to_row == player.goal_row:
+        return False
+    before = {
+        (r, c) for r, c, _ar, _ac in list_opponent_free_captures_against_us(board, player)
+    }
+    trial = copy_board(board)
+    trial.apply_move(move, player)
+    if trial.has_player_won(player):
+        return False
+    opponent = get_opponent(player)
+    for row in range(trial.rows):
+        for col in range(trial.cols):
+            if trial.grid[row][col] != player.symbol:
+                continue
+            for opp_move in _opponent_capture_moves_on(trial, player, row, col):
+                if (row, col) in before:
+                    continue
+                if is_free_capture(trial, opponent, opp_move):
+                    return True
+    return False
+
+
+def find_block_opponent_lane_threat(
+    board: Board, player: Player, *, lookahead: int = 3
+) -> Move | None:
+    """Zablokuj wolny bieg przeciwnika (pas lub skosy bez bić)."""
+    from ai.strategy import (
+        opponent_clear_lane_threat_in_n_moves,
+        opponent_diagonal_highway_threat,
+    )
+
+    if not opponent_clear_lane_threat_in_n_moves(
+        board, player, lookahead
+    ) and not opponent_diagonal_highway_threat(board, player, lookahead=lookahead + 1):
         return None
 
-    threats = threat_piece_squares(board, player, hanging)
-    if not threats:
+    legal = board.get_legal_moves(player)
+    if not legal:
         return None
 
-    if has_quiet_protection_for_hanging(board, player, hanging):
-        return None
+    candidates: List[Move] = []
+    for move in legal:
+        if move_allows_opponent_win_in_one(board, player, move):
+            continue
+        trial = copy_board(board)
+        trial.apply_move(move, player)
+        if not opponent_clear_lane_threat_in_n_moves(
+            trial, player, lookahead
+        ) and not opponent_diagonal_highway_threat(
+            trial, player, lookahead=lookahead + 1
+        ):
+            candidates.append(move)
 
-    candidates = [
-        move
-        for move in get_good_captures(board, player)
-        if (move.to_row, move.to_col) in threats
-    ]
     if not candidates:
         return None
 
     def rank(move: Move) -> tuple:
         trial = copy_board(board)
         trial.apply_move(move, player)
-        resolved = sum(
-            1
-            for row, col in hanging
-            if trial.grid[row][col] != player.symbol
-            or not is_hanging_piece_at(trial, player, row, col)
+        from ai.strategy import (
+            opponent_diagonal_highway_threat,
+            our_single_parity_ratio,
+            square_parity,
         )
+
+        parity_fix = 0
+        if our_single_parity_ratio(board, player) >= 0.65:
+            dest_p = square_parity(move.to_row, move.to_col)
+            if dest_p != square_parity(move.from_row, move.from_col):
+                parity_fix = 1
+
+        return (
+            1 if trial.has_player_won(player) else 0,
+            1 if move.is_capture else 0,
+            parity_fix,
+            -1 if opponent_diagonal_highway_threat(trial, player, lookahead=3) else 0,
+            goal_progress_score(move, player),
+        )
+
+    return max(candidates, key=rank)
+
+
+def find_stop_free_gift_capture(board: Board, player: Player) -> Move | None:
+    """Zbić pion, który w następnej turze zabierze nam pion za darmo."""
+    gifts = list_opponent_free_captures_against_us(board, player)
+    if not gifts:
+        return None
+
+    attacker_squares = {(ar, ac) for _r, _c, ar, ac in gifts}
+    candidates = [
+        move
+        for move in board.get_legal_moves(player)
+        if move.is_capture and (move.to_row, move.to_col) in attacker_squares
+    ]
+    if not candidates:
+        return None
+
+    free = [m for m in candidates if is_free_capture(board, player, m)]
+    good = [m for m in candidates if not is_capture_trap(board, player, m)]
+    pool = free or good or candidates
+    return max(
+        pool,
+        key=lambda m: (
+            capture_exchange_balance(board, player, m),
+        )
+        + _rank_capture(board, player, m),
+    )
+
+
+def find_preemptive_threat_capture(board: Board, player: Player) -> Move | None:
+    """
+    Zbij pion przeciwnika, który w następnej turze może zbić nasz pion.
+    Nie pomijaj bicia tylko dlatego, że słaba „ochrona” z tyłu zostaje.
+    """
+    threatened = list_threatened_squares(board, player)
+    if not threatened:
+        return None
+
+    threats = threat_piece_squares(board, player, threatened)
+    if not threats:
+        return None
+
+    unprotected = [
+        (row, col)
+        for row, col in threatened
+        if not _is_protected(board, row, col, player)
+    ]
+    if unprotected and has_quiet_protection_for_hanging(board, player, unprotected):
+        return None
+
+    legal_caps = [
+        move
+        for move in board.get_legal_moves(player)
+        if move.is_capture and (move.to_row, move.to_col) in threats
+    ]
+    if not legal_caps:
+        return None
+
+    free = [m for m in legal_caps if is_free_capture(board, player, m)]
+    good = [m for m in legal_caps if not is_capture_trap(board, player, m)]
+    candidates = free or good or legal_caps
+
+    def rank(move: Move) -> tuple:
+        trial = copy_board(board)
+        trial.apply_move(move, player)
         return (
             1 if trial.has_player_won(player) else 0,
             1 if is_free_capture(board, player, move) else 0,
-            resolved,
+            1 if not is_capture_trap(board, player, move) else 0,
             goal_progress_score(move, player),
         )
 
@@ -287,8 +540,6 @@ def move_exposes_hanging_piece(board: Board, player: Player, move: Move) -> bool
             continue
         if find_immediate_win(after, player) is not None:
             continue
-        if get_good_captures(after, player):
-            continue
         if after.count_pieces(player.symbol) < pieces_before:
             return True
     return False
@@ -306,7 +557,17 @@ def get_good_captures(board: Board, player: Player) -> List[Move]:
     return [
         move
         for move in board.get_legal_moves(player)
-        if move.is_capture and not is_capture_trap(board, player, move)
+        if move.is_capture
+        and not is_capture_trap(board, player, move)
+        and is_profitable_capture(board, player, move)
+    ]
+
+
+def get_profitable_captures(board: Board, player: Player) -> List[Move]:
+    return [
+        move
+        for move in board.get_legal_moves(player)
+        if is_profitable_capture(board, player, move)
     ]
 
 
@@ -333,12 +594,46 @@ def find_best_capture(board: Board, player: Player) -> Move | None:
     return max(good, key=lambda m: _rank_capture(board, player, m))
 
 
+def find_free_capture_move(board: Board, player: Player) -> Move | None:
+    """Tylko darmowe bicie — resztę ocenia minimax."""
+    free = [
+        move
+        for move in get_free_captures(board, player)
+        if capture_non_worsening_in_2ply(board, player, move)
+    ]
+    if not free:
+        return None
+    return max(free, key=lambda m: _rank_capture(board, player, m))
+
+
+def find_profitable_capture_move(board: Board, player: Player) -> Move | None:
+    """Bicie co najmniej remis w materiale (np. niechronionym pionem)."""
+    candidates = [
+        move
+        for move in board.get_legal_moves(player)
+        if is_profitable_capture(board, player, move) and not is_capture_trap(board, player, move)
+    ]
+    if not candidates:
+        return None
+    return max(
+        candidates,
+        key=lambda m: (capture_exchange_balance(board, player, m),)
+        + _rank_capture(board, player, m),
+    )
+
+
 def find_mandatory_capture(board: Board, player: Player) -> Move | None:
-    """Bicie zagrożenia / darmowe / inne dobre bicie — w tej kolejności."""
+    """Zagrożenie / darmowy prezent → darmowe bicie (fallback)."""
+    gift = find_stop_free_gift_capture(board, player)
+    if gift is not None:
+        return gift
     threat = find_preemptive_threat_capture(board, player)
     if threat is not None:
         return threat
-    return find_best_capture(board, player)
+    free = find_free_capture_move(board, player)
+    if free is not None:
+        return free
+    return None
 
 
 def filter_safe_root_moves(
@@ -353,7 +648,10 @@ def filter_safe_root_moves(
     from ai.strategy import (
         detect_style_phase,
         move_creates_double_home_gap,
+        move_creates_same_color_wall,
         move_worsens_flank_defense,
+        opponent_has_clear_lane_to_goal,
+        quick_diagonal_highway_risk,
         premature_wing_advance,
     )
 
@@ -369,17 +667,47 @@ def filter_safe_root_moves(
             continue
         if avoid_hanging and move_exposes_hanging_piece(board, player, move):
             continue
+        if (
+            avoid_hanging
+            and move_creates_free_gift_for_opponent(board, player, move)
+            and not move_is_strategic(board, player, move)
+        ):
+            continue
+        trial_lane = copy_board(board)
+        trial_lane.apply_move(move, player)
+        if (
+            avoid_hanging
+            and (
+                opponent_has_clear_lane_to_goal(trial_lane, player)
+                or quick_diagonal_highway_risk(trial_lane, player)
+            )
+            and not move_is_strategic(board, player, move)
+        ):
+            continue
         if opening_like and (
             premature_wing_advance(board, player, move)
             or move_creates_double_home_gap(board, player, move)
         ):
             continue
+        if detect_style_phase(board, player) != "endgame":
+            if move_creates_same_color_wall(board, player, move):
+                continue
         if move_worsens_flank_defense(board, player, move):
             continue
         safe.append(move)
 
     if safe:
         return safe
+
+    non_gift = [
+        m
+        for m in moves
+        if not move_creates_free_gift_for_opponent(board, player, m)
+        or move_is_strategic(board, player, m)
+    ]
+    if non_gift:
+        return non_gift
+
     captures = [m for m in moves if m.is_capture]
     if captures:
         return captures
@@ -403,10 +731,6 @@ def apply_tactical_constraints(
     if free:
         return free
 
-    good_caps = [m for m in moves if m.is_capture and not is_capture_trap(board, player, m)]
-    if good_caps:
-        return good_caps
-
     safe = filter_safe_root_moves(board, player, moves)
     if safe:
         return safe
@@ -427,7 +751,8 @@ def closest_goal_distance(board: Board, player: Player) -> int:
 
 
 def is_goal_race(board: Board, player: Player) -> bool:
-    return closest_goal_distance(board, player) <= 4
+    """Wyścig do mety — tylko gdy naprawdę blisko (unika wolnego solvera w debiucie)."""
+    return closest_goal_distance(board, player) <= 3
 
 
 def should_skip_opening_book(board: Board, player: Player) -> bool:
@@ -536,10 +861,12 @@ def find_forced_win_move(
     best_score = -inf
     opponent = get_opponent(player)
 
-    ply_cap = min(max_depth, 4 + closest_goal_distance(board, player))
+    ply_cap = min(max_depth, 2 + closest_goal_distance(board, player), 5)
 
     for move in ordered:
         if deadline is not None and perf_counter() >= deadline:
+            break
+        if deadline is not None and perf_counter() >= deadline - 0.002:
             break
         trial = copy_board(board)
         trial.apply_move(move, player)

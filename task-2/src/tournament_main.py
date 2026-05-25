@@ -22,8 +22,8 @@ from tournament.protocol import (
 )
 
 # Turniej: t_move=1.0 s — budżet wewnętrzny + twardy limit w play_turn.
-MOVE_TIME_BUDGET_S = 0.48
-MAX_SEARCH_DEPTH = 5
+MOVE_TIME_BUDGET_S = 0.58
+MAX_SEARCH_DEPTH = 6
 HARD_TURN_LIMIT_S = 0.92
 
 
