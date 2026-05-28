@@ -244,7 +244,39 @@ Pełna tabela wygenerowana w notebooku. Poniżej przedstawiam skrót skonfigurow
 | DT Regularyzowane (depth=3) [czyste / standaryz.] | 0,655 | 0,456 | 0,443 | 0,442 |
 | Naive Bayes (1e-5) [czyste] | 0,667 | 0,503 | 0,434 | 0,424 |
 
-### 6.2. Interpretacja metryk
+### 6.2. Szczegółowa analiza błędów (Confusion Matrix)
+
+Dla najlepszego modelu (`Decision Tree, max_depth=3, Dane PCA`) otrzymano następującą macierz pomyłek:
+
+| Rzeczywista \\ Predykcja | pred_C | pred_D | pred_CL |
+|--------------------------|-------:|-------:|--------:|
+| true_C                   | 42     | 5      | 0       |
+| true_D                   | 12     | 20     | 0       |
+| true_CL                  | 4      | 1      | 0       |
+
+Kluczowe liczby dla klasy mniejszościowej `CL`:
+
+- `CL` poprawnie wykryte (`cm[2,2]`): **0**
+- `CL` pomylone z `C` (`cm[2,0]`): **4**
+- `CL` pomylone z `D` (`cm[2,1]`): **1**
+
+Wniosek: mimo dobrej accuracy globalnej model nie nauczył się rozpoznawać klasy `CL` i wszystkie przypadki tej klasy przypisał do klas dominujących (`C` lub `D`).
+
+### 6.3. Dodatkowy eksperyment: `class_weight='balanced'`
+
+Aby poprawić wykrywanie klasy mniejszościowej `CL`, wykonano dodatkowy eksperyment:
+
+`DecisionTreeClassifier(max_depth=3, criterion='gini', class_weight='balanced', random_state=42)`
+
+Wyniki dla klasy `CL`:
+
+- `CL` poprawnie wykryte (`cm[2,2]`): **1**
+- `CL` pomylone z `C` (`cm[2,0]`): **3**
+- `CL` pomylone z `D` (`cm[2,1]`): **1**
+
+Wniosek: użycie wag klas poprawiło wykrywanie `CL` (z 0 do 1 poprawnej predykcji), ale nadal większość przypadków tej klasy jest mylona z klasami dominującymi. To potwierdza, że sam `class_weight='balanced'` pomaga tylko częściowo i warto dalej testować inne rozwiązania problemu.
+
+### 6.4. Interpretacja metryk
 
 **Accuracy (~66–74%)** — przy dominacji klasy **C** model może osiągać przyzwoitą trafność, przewidując głównie `C` i `D`. Accuracy **nie wystarcza** do oceny jakości dla klasy **CL** (25 przypadków w całym zbiorze, ~5 w teście).
 
@@ -257,6 +289,10 @@ Pełna tabela wygenerowana w notebooku. Poniżej przedstawiam skrót skonfigurow
 | Czyste | Dobre dla NB i DT bez PCA; interpretowalne progi |
 | Standaryzowane | Poprawia NB przy `var_smoothing=0,1`; RF najlepszy w tej reprezentacji |
 | PCA | Najlepsze dla **regularyzowanego DT**; pogarsza NB przy małym smoothing |
+
+Dlaczego PCA pomogło drzewu (`max_depth=3`)? W tym zadaniu PCA prawdopodobnie zadziałało jako reduktor szumu i współliniowości między cechami laboratoryjnymi. Dla płytkiego drzewa oznacza to prostsze, stabilniejsze podziały i mniejsze ryzyko „błądzenia” po mało istotnych cechach.
+
+Komentarz do zapaści Naive Bayes (`Acc = 0,321` dla danych standaryzowanych i `var_smoothing=1e-9`): po standaryzacji część rozkładów klasowych może mieć bardzo małą wariancję (szczególnie dla klasy rzadkiej `CL`). Przy bardzo małym wygładzaniu model staje się numerycznie niestabilny (silnie „ostre” gęstości Gaussa), co zniekształca prawdopodobieństwa a posteriori i pogarsza klasyfikację.
 
 **Porównanie klasyfikatorów:**
 
@@ -272,7 +308,7 @@ Pełna tabela wygenerowana w notebooku. Poniżej przedstawiam skrót skonfigurow
 2. **Imputacja medianą / modą** pozwoliła wykorzystać wszystkie 418 rekordów i usunęła 742 braki w podzbiorze treningowym.
 3. **Najlepsza konfiguracja** w przeprowadzonych testach: drzewo decyzyjne z `max_depth=3` na cechach po **PCA** (Acc test = **0,738**).
 4. **Przeuczenie drzewa** potwierdzono porównaniem Acc_train=1,0 vs Acc_test=0,655; regularyzacja głębokości obniża dopasowanie treningowe bez pogorszenia testu.
-5. Klasa **CL** pozostaje trudna — niskie wartości F1-macro sugerują potrzebę technik dla niezbalansowanych danych (np. `class_weight`, oversampling) w dalszej pracy.
+5. Klasa **CL** pozostaje trudna — nawet po `class_weight='balanced'` model wykrywa tylko 1 z 5 przypadków `CL`, więc warto dalej testować techniki dla niezbalansowanych danych.
 
 ---
 
