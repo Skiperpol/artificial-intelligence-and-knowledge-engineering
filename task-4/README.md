@@ -19,9 +19,7 @@
 5. [Zadanie 3 — Klasyfikacja (40 pkt + bonus)](#5-zadanie-3--klasyfikacja-40-pkt--bonus)
 6. [Zadanie 4 — Ewaluacja i interpretacja (20 pkt)](#6-zadanie-4--ewaluacja-i-interpretacja-20-pkt)
 7. [Podsumowanie i wnioski](#7-podsumowanie-i-wnioski)
-8. [Materiały źródłowe](#8-materiały-źródłowe)
-9. [Biblioteki](#9-biblioteki)
-10. [Uruchomienie](#10-uruchomienie)
+8. [Biblioteki](#8-biblioteki)
 
 ---
 
@@ -276,7 +274,20 @@ Wyniki dla klasy `CL`:
 
 Wniosek: użycie wag klas poprawiło wykrywanie `CL` (z 0 do 1 poprawnej predykcji), ale nadal większość przypadków tej klasy jest mylona z klasami dominującymi. To potwierdza, że sam `class_weight='balanced'` pomaga tylko częściowo i warto dalej testować inne rozwiązania problemu.
 
-### 6.4. Interpretacja metryk
+### 6.4. Ranking konfiguracji pod kątem wykrywania klasy `CL`
+
+W dodatkowym benchmarku porównano wszystkie badane modele (`GaussianNB`, różne warianty drzew, `RandomForest`, wersje balanced) na trzech reprezentacjach danych. Oprócz liczby poprawnie wykrytych `CL` analizowano też, ile razy model w ogóle przewidział klasę `CL`.
+
+Najważniejsze obserwacje:
+
+- `GaussianNB (1e-9)` na danych standaryzowanych i PCA wykrywa **5/5** przypadków `CL` (`cm[2,2]=5`), ale jednocześnie przewiduje `CL` bardzo często: odpowiednio **51** i **78** razy.
+- To oznacza bardzo dużo fałszywych alarmów (`pred_CL` dla próbek rzeczywiście `C` lub `D`), więc sam wynik `cm[2,2]` nie może być jedynym kryterium wyboru modelu.
+- `DecisionTree (max_depth=3, class_weight='balanced')` daje skromniejszy, ale bardziej konserwatywny profil: `cm[2,2]=1`, `cm[2,0]=3`, `cm[2,1]=1`.
+- Dla wielu konfiguracji (`RandomForest`, część drzew i NB z innymi parametrami) `cm[2,2]=0`, czyli brak poprawnej detekcji klasy mniejszościowej.
+
+Wniosek praktyczny: przy ocenie klasy `CL` trzeba równoważyć **recall klasy mniejszościowej** z **precyzją predykcji `CL`**. Modele „łapiące wszystko jako CL” poprawiają recall, ale pogarszają użyteczność kliniczną.
+
+### 6.5. Interpretacja metryk
 
 **Accuracy (~66–74%)** — przy dominacji klasy **C** model może osiągać przyzwoitą trafność, przewidując głównie `C` i `D`. Accuracy **nie wystarcza** do oceny jakości dla klasy **CL** (25 przypadków w całym zbiorze, ~5 w teście).
 
@@ -308,7 +319,7 @@ Komentarz do zapaści Naive Bayes (`Acc = 0,321` dla danych standaryzowanych i `
 2. **Imputacja medianą / modą** pozwoliła wykorzystać wszystkie 418 rekordów i usunęła 742 braki w podzbiorze treningowym.
 3. **Najlepsza konfiguracja** w przeprowadzonych testach: drzewo decyzyjne z `max_depth=3` na cechach po **PCA** (Acc test = **0,738**).
 4. **Przeuczenie drzewa** potwierdzono porównaniem Acc_train=1,0 vs Acc_test=0,655; regularyzacja głębokości obniża dopasowanie treningowe bez pogorszenia testu.
-5. Klasa **CL** pozostaje trudna — nawet po `class_weight='balanced'` model wykrywa tylko 1 z 5 przypadków `CL`, więc warto dalej testować techniki dla niezbalansowanych danych.
+5. Klasa **CL** pozostaje trudna — część modeli wykrywa więcej przypadków `CL`, ale kosztem wielu fałszywych alarmów; dlatego w dalszej pracy warto stroić modele pod kompromis precision/recall dla klasy mniejszościowej.
 
 ---
 
