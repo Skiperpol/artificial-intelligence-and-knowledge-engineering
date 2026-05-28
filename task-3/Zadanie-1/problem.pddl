@@ -10,7 +10,7 @@
     tir_poznan tir_warszawa tir_szczecin - truck
     pociag_towarowy - train
     kontenerowiec_baltyk - ship
-    awionetka_cargo - plane
+    maly_samolot - plane
 
     paczka_medyczna elektronika czesci_samochodowe turbina_wiatrowa - package
   )
@@ -21,21 +21,21 @@
     (vehicle-empty tir_szczecin)
     (vehicle-empty pociag_towarowy)
     (vehicle-empty kontenerowiec_baltyk)
-    (vehicle-empty awionetka_cargo)
+    (vehicle-empty maly_samolot)
 
     (compatible paczka_medyczna tir_poznan)
     (compatible paczka_medyczna tir_warszawa)
     (compatible paczka_medyczna tir_szczecin)
     (compatible paczka_medyczna pociag_towarowy)
     (compatible paczka_medyczna kontenerowiec_baltyk)
-    (compatible paczka_medyczna awionetka_cargo)
+    (compatible paczka_medyczna maly_samolot)
 
     (compatible elektronika tir_poznan)
     (compatible elektronika tir_warszawa)
     (compatible elektronika tir_szczecin)
     (compatible elektronika pociag_towarowy)
     (compatible elektronika kontenerowiec_baltyk)
-    (compatible elektronika awionetka_cargo)
+    (compatible elektronika maly_samolot)
 
     (compatible czesci_samochodowe tir_poznan)
     (compatible czesci_samochodowe tir_warszawa)
@@ -52,7 +52,7 @@
     (vehicle-at tir_szczecin szczecin_port)
     (vehicle-at pociag_towarowy wroclaw_stacja)
     (vehicle-at kontenerowiec_baltyk gdansk_port)
-    (vehicle-at awionetka_cargo katowice_lotnisko)
+    (vehicle-at maly_samolot katowice_lotnisko)
 
     (package-at paczka_medyczna rzeszow_magazyn)
     (package-at elektronika poznan_magazyn)
