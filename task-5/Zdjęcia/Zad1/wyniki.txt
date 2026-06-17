@@ -1,0 +1,8 @@
+--- Klasa: minus (etykieta: __label__meta_minus_m) ---
+Leczyła m się u niej parę lat i nic mi nie pomogła , a jak zmieniła m lekarza po krótkim czasie zobaczyła m już poprawę a w tej chwili jestem już bez leków 6 lat i jest wszystko dobrze . Dr Ciborska leczyła mnie na depresję a potem przez dr Kopystecką miała m rozpoznany zespół maniakalno depresyjny ...
+
+--- Klasa: neutral (etykieta: __label__meta_zero) ---
+„ Cukrzyca , to choroba , którą już pod koniec XX wieku uważano za epidemię . Obecnie już wiemy , że to także epidemia XXI wieku . Mówiąc o chorobowości w Polsce , to na podstawie danych NFZ , które są najbardziej wiarygodne , wiemy , że wynosi ona 5 , 2 proc . naszej populacji ” – mówiła na poniedz...
+
+--- Klasa: plus (etykieta: __label__meta_plus_m) ---
+Konkretna , Wszystkie badania robi na miejscu od razu przy wizycie . Zawsze wychodzi się z gabinetu z postawioną diagnozą . Potrafi pomóc juz na pierwszej wizycie . Chodze do niej juz od kilku lat . Prowadziła ciązę kilku moim kolezanką , i one również mają pozytywną opinie na temat Pani Doktor .
