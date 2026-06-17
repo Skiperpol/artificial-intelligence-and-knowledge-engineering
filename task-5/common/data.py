@@ -6,12 +6,6 @@ from .labels import AMBIGUOUS_LABEL, map_dataset_label
 
 
 def load_polemo_test():
-    """
-    Ładuje split testowy PolEmo2.0-IN i usuwa klasę ambiguous.
-
-    Zwraca listę słowników:
-        {"sentence": str, "target": str, "class": str}
-    """
     dataset = load_dataset("allegro/klej-polemo2-in", split="test")
 
     examples = []
