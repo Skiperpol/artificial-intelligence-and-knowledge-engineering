@@ -1,5 +1,3 @@
-"""Obliczanie i wyświetlanie metryk klasyfikacji."""
-
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
@@ -11,12 +9,6 @@ from .labels import CLASS_NAMES
 
 
 def evaluate_predictions(y_true: list[str], y_pred: list[str]) -> dict:
-    """
-    Liczy standardowe metryki dla klasyfikacji 3-klasowej.
-
-    Zwraca słownik z accuracy, f1_macro, f1_weighted, raportem tekstowym
-    i macierzą pomyłek.
-    """
     accuracy = accuracy_score(y_true, y_pred)
     f1_macro = f1_score(y_true, y_pred, labels=CLASS_NAMES, average="macro", zero_division=0)
     f1_weighted = f1_score(y_true, y_pred, labels=CLASS_NAMES, average="weighted", zero_division=0)
@@ -40,7 +32,6 @@ def evaluate_predictions(y_true: list[str], y_pred: list[str]) -> dict:
 
 
 def print_evaluation(results: dict, title: str = "Wyniki ewaluacji") -> None:
-    """Wypisuje metryki w czytelnej formie."""
     print(f"\n{'=' * 50}")
     print(title)
     print(f"{'=' * 50}")
