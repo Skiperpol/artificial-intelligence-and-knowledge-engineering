@@ -1,0 +1,16 @@
+Przykłady pomyłek modelu (max 5):
+
+Prawda: minus | Predykcja: plus
+Leczyła m się u niej parę lat i nic mi nie pomogła , a jak zmieniła m lekarza po krótkim czasie zobaczyła m już poprawę a w tej chwili jestem już bez leków 6 lat i jest wszystko dobrze . Dr Ciborska leczyła mnie na depresję a potem przez dr Kopysteck...
+
+Prawda: minus | Predykcja: neutral
+Skuszony wieloma bardzo pozytywnymi opiniami postanowił em wybrać Panią Doktor . Z początku był em zadowolony , jednak z czasem miałem coraz większe wątpliwości i w końcu znalazły one wiarygodne potwierdzenie . Zacznijmy od zalet . Pani Doktor jest z...
+
+Prawda: neutral | Predykcja: plus
+„ Cukrzyca , to choroba , którą już pod koniec XX wieku uważano za epidemię . Obecnie już wiemy , że to także epidemia XXI wieku . Mówiąc o chorobowości w Polsce , to na podstawie danych NFZ , które są najbardziej wiarygodne , wiemy , że wynosi ona 5...
+
+Prawda: neutral | Predykcja: plus
+" Jego technologia jest bardzo szeroko stosowana , gdyż jest prosta i skuteczna - podkreśla naukowiec . - Z dowolnej , dojrzałej komórki człowieka , np . komórki skóry albo krwi , pozwala w prosty sposób uzyskać tzw . komórkę pluripotentną - taką , z...
+
+Prawda: neutral | Predykcja: plus
+Endoskopowe badania przesiewowe mają ogromny wpływ na zdrowie populacji , pozwalają również ograniczyć koszty leczenia , zwłaszcza w przypadku kolonoskopii . Dzięki wczesnemu wykrywaniu nowotworów nie dochodzi do powstania zawansowanych zmian nowotwo...
