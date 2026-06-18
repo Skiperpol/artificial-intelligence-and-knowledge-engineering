@@ -1,0 +1,78 @@
+_loaded_model = None
+_loaded_tokenizer = None
+
+
+def get_llm(temperature=0.1, max_new_tokens=15):
+    global _loaded_model, _loaded_tokenizer
+
+    if _loaded_model is None:
+        _loaded_tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL)
+        _loaded_model = AutoModelForCausalLM.from_pretrained(
+            LLM_MODEL,
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            device_map="auto",
+        )
+
+    hf_pipe = pipeline(
+        "text-generation",
+        model=_loaded_model,
+        tokenizer=_loaded_tokenizer,
+        temperature=temperature,
+        do_sample=temperature > 0,
+        max_new_tokens=max_new_tokens,
+        pad_token_id=_loaded_tokenizer.eos_token_id,
+    )
+    return HuggingFacePipeline(pipeline=hf_pipe)
+
+
+def parse_text_answer(answer: str) -> str:
+    """Parsuje zwykłą odpowiedź tekstową LLM."""
+    mapped = map_text_to_class(answer)
+    return mapped if mapped else "neutral"
+
+
+def parse_json_answer(answer: str) -> str:
+    try:
+        parsed = json_parser.parse(answer)
+        sentiment = parsed.get("sentiment", "")
+        return parse_text_answer(sentiment)
+    except Exception:
+        match = re.search(r'\{[^}]+\}', answer)
+        if match:
+            try:
+                data = json.loads(match.group())
+                return parse_text_answer(data.get("sentiment", ""))
+            except json.JSONDecodeError:
+                pass
+        return parse_text_answer(answer)
+
+
+def run_llm_experiment(name, prompt_template, temperature, parse_fn, use_json_format=False):
+    llm = get_llm(temperature=temperature)
+
+    if use_json_format:
+        prompt = PromptTemplate.from_template(prompt_template)
+        chain = prompt | llm
+        invoke_kwargs = {"text": None, "format_instructions": json_format_instructions}
+    else:
+        prompt = PromptTemplate.from_template(prompt_template)
+        chain = prompt | llm
+        invoke_kwargs = None
+
+    y_pred = []
+    for sentence in tqdm(sentences, desc=name):
+        if use_json_format:
+            answer = chain.invoke({"text": sentence, "format_instructions": json_format_instructions})
+            y_pred.append(parse_fn(answer))
+        else:
+            answer = chain.invoke({"text": sentence})
+            y_pred.append(parse_fn(answer))
+
+    metrics = evaluate_predictions(y_true, y_pred)
+    return {
+        "eksperyment": name,
+        "temperature": temperature,
+        "accuracy": metrics["accuracy"],
+        "f1_macro": metrics["f1_macro"],
+        "f1_weighted": metrics["f1_weighted"],
+    }
