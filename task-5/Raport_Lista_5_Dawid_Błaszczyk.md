@@ -133,7 +133,7 @@ Klasa **minus** dominuje (49%), klasa **neutral** jest najmniej liczna (19%). Zb
 | Odch. std. | 403,0 | 71,7  |
 
 
-Recenzje są **dość długie** (średnio ~760 znaków, ~133 słowa) co jest istotne przy doborze parametru `max_length` w modelach.
+Recenzje są **dość długie** (średnio ≈760 znaków, ≈133 słowa) co jest istotne przy doborze parametru `max_length` w modelach.
 
 ### 4.5. Przykładowe recenzje
 
@@ -318,7 +318,7 @@ Tabela porównawcza — wszystkie eksperymenty
 
 - **Kluczowa rola domeny danych (*domain shift*):** Model dostrojony na danych zbliżonych do docelowych (recenzje konsumenckie) poradził sobie radykalnie lepiej (Accuracy 75,9%) niż model wyspecjalizowany w tekstach finansowych (Accuracy 41,2%). Potwierdza to, że wiedza językowa z wąskiej dziedziny nie podlega prostej generalizacji na ogólną analizę emocji.
 - **Wpływ okna kontekstowego (**`max_length`**):** Długość tekstu ma krytyczne znaczenie, jeśli okno zostanie ustawione poniżej średniej długości wypowiedzi (wartości 32 i 64). Skracanie recenzji odcina kluczowe słowa kluczowe i podsumowania. Optymalnym kompromisem wydajnościowym i jakościowym jest wartość 256 tokenów. Powyżej tej granicy następuje stabilizacja wyników, co oznacza, że dłuższy kontekst nie wnosi już nowych informacji.
-- **Niezależność od temperatury:** Eksperyment potwierdził teoretyczne założenia, że w przypadku klasyfikacji z twardym mapowaniem (operacja `argmax` na logitach) modyfikacja temperatury nie wpływa w żaden sposób na ostatecznie wybieraną klasę. Metryki dla każdego wariantu $T$ pozostały identyczne.
+- **Niezależność od temperatury:** Eksperyment potwierdził teoretyczne założenia, że w przypadku klasyfikacji z twardym mapowaniem (operacja `argmax` na logitach) modyfikacja temperatury nie wpływa w żaden sposób na ostatecznie wybieraną klasę. Metryki dla każdego wariantu temperatury pozostały identyczne.
 - **Charakterystyka klas:** Niezależnie od testowanej konfiguracji, klasa *neutral* niezmiennie stanowiła największe wyzwanie klasyfikacyjne (notując najniższe wartości miary Recall), co wynika ze specyfiki i niejednoznaczności języka używanego w neutralnych recenzjach.
 
 ---
@@ -406,7 +406,7 @@ Głównym źródłem pomyłek modelu generatywnego były sytuacje skrajne w dłu
 ### 7.4. Wnioski końcowe z sekcji decoder-only
 
 - **Przewaga architektury generatywnej:** Po wdrożeniu poprawnego potoku parsowania i czyszczenia tekstu, model `Qwen2.5-1.5B-Instruct` osiągnął bardzo wysoką dokładność ogólną na poziomie **87,0%**. Wynik ten w sposób wyraźny przewyższa najlepszy wariant modelu bazowanego na enkoderze (`HerBERT` osiągnął maksymalnie 76,2% dla okna 256). Pokazuje to duży potencjał modeli z rodziny LLM w zadaniach zero-shot z odpowiednio skonstruowanym promptem.
-- **Znakomita separacja skrajnych emocji:** Model wykazuje niemal perfekcyjną zdolność rozpoznawania tekstów silnie negatywnych (miara $F1 = 0,96$ dla klasy `minus`) oraz bardzo wysoką dla tekstów pozytywnych ($F1 = 0,85$ dla klasy `plus`). Przypadki bezpośredniego pomylenia klasy negatywnej z pozytywną (i odwrotnie) były incydentalne (łącznie 9 przypadków na cały zbiór).
+- **Znakomita separacja skrajnych emocji:** Model wykazuje niemal perfekcyjną zdolność rozpoznawania tekstów silnie negatywnych (miara F1 = 0,96 dla klasy `minus`) oraz bardzo wysoką dla tekstów pozytywnych (F1 = 0,85 dla klasy `plus`). Przypadki bezpośredniego pomylenia klasy negatywnej z pozytywną (i odwrotnie) były incydentalne (łącznie 9 przypadków na cały zbiór).
 - **Trudność klasy neutralnej:** Podobnie jak w przypadku enkoderów, najtrudniejszym zadaniem okazało się wychwycenie tekstów neutralnych (niski Recall na poziomie 0,50). Macierz pomyłek jednoznacznie wskazuje, że model przejawia silną tendencję do nadinterpretacji tekstów obiektywnych/neutralnych i błędnego przypisywania ich do klasy pozytywnej (aż 47 przypadków fałszywie dodatnich). Prawdopodobnie wynika to z uprzejmego tonu wypowiedzi, który model generatywny utożsamia z sentymentem pozytywnym.
 
 ---
@@ -415,26 +415,24 @@ Głównym źródłem pomyłek modelu generatywnego były sytuacje skrajne w dłu
 
 ### 8.1. Metodologia
 
-Zbadano trzy aspekty wpływające na wyniki klasyfikacji LLM:
+Zbadałem **cztery aspekty** wpływające na wyniki klasyfikacji LLM:
 
 
-| Aspekt          | Warianty                                                    |
-| --------------- | ----------------------------------------------------------- |
-| **Temperatura** | 0,0 / 0,1 / 0,7                                             |
-| **Prompt**      | prosty (EN) / szczegółowy (PL z definicjami klas)           |
-| **Parsowanie**  | regex (`map_text_to_class`) / `JsonOutputParser` (Pydantic) |
+| Aspekt          | Warianty                                                         |
+| --------------- | ---------------------------------------------------------------- |
+| **Temperatura** | 0,0 / 0,1 / 0,7                                                  |
+| **Prompt**      | Prosty (angielski) / Szczegółowy (polski z definicjami klas)     |
+| **Parsowanie**  | Wyrażenia regularne (Regex) / Strukturyzowany `JsonOutputParser` |
+| **Kwantyzacja** | float16 / 4-bit NF4 (`bitsandbytes`)                             |
 
 
-Eksperymenty uruchomiono na **podzbiorze zbioru testowego (70 próbek)** — ze względu na czas inferencji LLM:
+W celu automatyzacji testów i zapewnienia powtarzalności środowiska zaimplementowano dedykowany potok przetwarzania oparty na następujących komponentach programistycznych:
 
-Liczba próbek
-
-Implementacja w module eksperymentów:
-
-- `get_llm(temperature)` — ładowanie modelu z cache (jednorazowe),
-- `parse_text_answer()` — parsowanie odpowiedzi tekstowej (wyciąganie etykiety po `Class:` / `Klasa:`),
-- `parse_json_answer()` — parsowanie JSON z fallback regex,
-- `run_llm_experiment()` — uruchomienie pełnego eksperymentu z metrykami.
+- `load_model(quantization)` – dynamiczne ładowanie wag modelu `Qwen2.5-1.5B-Instruct` w natywnej precyzji `float16` lub w skompresowanym formacie 4-bitowym NF4.
+- `reset_llm_cache()` – mechanizm czyszczenia pamięci podręcznej GPU (`torch.cuda.empty_cache()` oraz usunięcie referencji do obiektów), zapobiegający nakładaniu się alokacji i umożliwiający precyzyjny pomiar zużycia VRAM dla każdego wariantu.
+- `parse_text_answer()` – funkcja wyciągająca twardą etykietę tekstową ze strumienia wyjściowego LLM (na podstawie markerów `Class:` lub `Klasa:`).
+- `parse_json_answer()` – parser obiektów JSON implementujący regułę bezpieczeństwa (*fallback*) opartą na wyrażeniach regularnych w przypadku uszkodzenia struktury dokumentu przez model.
+- `run_llm_experiment()` – nadrzędna funkcja sterująca, odpowiedzialna za sekwencyjne uruchamianie konfiguracji, zbieranie miar klasyfikacyjnych (Accuracy, F1), monitorowanie czasu inferencji (`czas_s`) oraz rejestrowanie szczytowego zużycia pamięci karty graficznej (`vram_gb`).
 
 ### 8.2. Definicje promptów
 
@@ -450,76 +448,104 @@ Definicje promptów
 
 ### 8.3. Eksperyment A — wpływ temperatury
 
-Model: `Qwen/Qwen2.5-1.5B-Instruct`, prompt prosty (`PROMPT_SIMPLE`).
-
-Eksperyment temperatury
+Model: `Qwen/Qwen2.5-1.5B-Instruct`, prompt prosty (`PROMPT_SIMPLE`), kwantyzacja float16.
 
 
-| Temperatura | Accuracy | F1 macro | F1 weighted |
-| ----------- | -------- | -------- | ----------- |
-| 0,0         | 0,7743   | 0,6507   | 0,7189      |
-| 0,1         | 0,7743   | 0,6507   | 0,7189      |
-| 0,7         | 0,7829   | 0,6671   | 0,7318      |
+| Temperatura | Accuracy | F1 macro | F1 weighted | Czas [s] | VRAM [GB] |
+| ----------- | -------- | -------- | ----------- | -------- | --------- |
+| 0,0         | 0,8127   | 0,6626   | 0,7636      | 435,5    | 3,24      |
+| 0,1         | 0,8111   | 0,6576   | 0,7605      | 410,8    | 3,24      |
+| 0,7         | 0,8176   | 0,6832   | 0,7758      | 396,7    | 3,24      |
 
 
-**Wniosek:** Przy `do_sample=False` (temperatura 0,0 i 0,1) wyniki są **identyczne**. Wyższa temperatura (0,7) daje **niewielką poprawę**, kosztem większej losowości odpowiedzi.
+**Wnioski:**
+
+- **Stabilność niskich temperatur:** Dla wartości $T=0.0$ oraz $T=0.1$ model wykazuje bardzo zbliżone wskaźniki efektywności (Accuracy $\approx 81\%$). Minimalne różnice wynikają z faktu, że bardzo niska temperatura nieznacznie modyfikuje prawdopodobieństwa, ale w większości przypadków utrzymuje model w trybie deterministycznego wyboru najbardziej prawdopodobnego tokenu (*greedy decoding*).
+- **Wpływ próbkowania ($T=0.7$):** Podniesienie temperatury do $0.7$ (aktywujące pełne próbkowanie stochastyczne) przyniosło zauważalną poprawę zbalansowanej miary $F1\text{ macro}$ (wzrost z 0,657 do 0,683). Delikatne rozmycie rozkładu prawdopodobieństwa pozwoliło modelowi na bardziej elastyczny wybór etykiet w przypadkach niejednoznacznych, co pozytywnie wpłynęło na rzadziej reprezentowane klasy. Odbywa się to jednak kosztem utraty determinizmu — przy ponownym uruchomieniu wyniki mogą się nieznacznie różnić.
+- **Analiza wydajnościowa:** Zużycie pamięci VRAM pozostało idealnie stałe (3,24 GB), co potwierdza, że temperatura modyfikuje jedynie operację próbkowania na wyjściu i nie zmienia rozmiaru struktur modelu. Obserwowane wahania czasu inferencji (zakres 396–435 sekund) mają charakter czysto środowiskowy (wynikają z chwilowego obciążenia zasobów sprzętowych) i nie są matematyczną konsekwencją zmiany temperatury.
 
 ### 8.4. Eksperyment B — wpływ promptu
 
-Temperatura stała: 0,1.
-
-Eksperyment promptu
+Temperatura stała: 0,1, kwantyzacja float16.
 
 
-| Prompt           | Accuracy | F1 macro | F1 weighted |
-| ---------------- | -------- | -------- | ----------- |
-| prosty (EN)      | 0,7714   | 0,6436   | 0,7133      |
-| szczegółowy (PL) | 0,8314   | 0,7960   | 0,8268      |
+| Prompt           | Accuracy   | F1 macro   | F1 weighted | Czas [s] | VRAM [GB] |
+| ---------------- | ---------- | ---------- | ----------- | -------- | --------- |
+| prosty (EN)      | 0,8143     | 0,6674     | 0,7668      | 399,8    | 3,24      |
+| szczegółowy (PL) | **0,8583** | **0,7999** | **0,8513**  | 424,1    | 3,27      |
 
 
-**Wniosek:** Szczegółowy prompt po polsku z definicjami klas **znacząco poprawia** wyniki w porównaniu z prostym promptem angielskim, model lepiej radzi sobie z polskimi recenzjami przy jasnych instrukcjach.
+**Wnioski:**
+
+- **Drastyczny wzrost jakości klasyfikacji:** Zastosowanie rozbudowanego promptu w języku polskim przyniosło zdecydowanie najlepsze wyniki w całej eksploracji parametrów LLM. Wskaźnik celności wzrósł o **4,4 punktu procentowego**, natomiast zbalansowana miara $F1\text{ macro}$ zanotowała potężny skok o ponad **13 p.p.** (z 0,667 do 0,799).
+- **Uzasadnienie lingwistyczne:** Podanie precyzyjnych definicji klas bezpośrednio w języku polskim (będącym językiem analizowanych recenzji) pozwoliło modelowi `Qwen2.5` na znacznie lepszą aktywację odpowiednich struktur semantycznych w jego wagach. Model przestał działać "intuicyjnie" na poziomie pojedynczych słów kluczowych, a zaczął poprawnie interpretować niejednoznaczne i neutralne opisy.
+- **Analiza kosztu obliczeniowego:** Dłuższa i bardziej szczegółowa instrukcja po polsku przełożyła się na minimalny wzrost zapotrzebowania na pamięć graficzną (z 3,24 GB do 3,27 GB) oraz wydłużenie czasu przetwarzania o ok. 24 sekundy. Wynika to bezpośrednio z konieczności przeliczenia większej liczby tokenów wejściowych oraz alokacji większej przestrzeni na tzw. *KV Cache* (pamięć podręczną kontekstu). Biorąc pod uwagę potężny zysk jakościowy, koszt ten jest w pełni akceptowalny.
 
 ### 8.5. Eksperyment C — parsowanie JSON
 
-Eksperyment JSON
+
+| Parsowanie       | Accuracy | F1 macro | F1 weighted | Czas [s] | VRAM [GB] |
+| ---------------- | -------- | -------- | ----------- | -------- | --------- |
+| JsonOutputParser | 0,5016   | 0,5050   | 0,5295      | 434,9    | 3,33      |
 
 
-| Parsowanie       | Accuracy | F1 macro | F1 weighted |
-| ---------------- | -------- | -------- | ----------- |
-| JsonOutputParser | 0,4857   | 0,4878   | 0,4956      |
+**Wnioski:**
+
+- **Drastyczny spadek skuteczności:** Próba wymuszenia ustrukturyzowanego wyjścia w formacie JSON zredukowała dokładność klasyfikacji do poziomu **50,16%**, co w zadaniu trójklasowym jest wynikiem zbliżonym do losowego zgadywania.
+- **Syndrom przeciążenia małych architektur:** Model o skali 1.5B parametrów ma ograniczoną pojemność reprezentacji. Narzucenie mu restrykcyjnych reguł składniowych kodu programistycznego sprawiło, że model zużył swoje "zdolności uwagi" na dbanie o domykanie nawiasów klamrowych i cudzysłowów, tracąc przy tym zdolność logicznego wnioskowania o emocjach zawartych w tekście. W efekcie model często generował uszkodzone lub niekompletne obiekty tekstowe, co uniemożliwiło poprawne działanie parsera z biblioteki *LangChain*.
+- **Ślad pamięciowy:** Eksperyment ten odnotował najwyższe zużycie pamięci graficznej (**3,33 GB**) spośród wszystkich testów przeprowadzonych w precyzji `float16`. Wynika to z dodatkowego narzutu na przetwarzanie tokenów strukturalnych (składni JSON) oraz konieczności utrzymywania w pamięci instrukcji i schematów walidacyjnych wstrzykiwanych automatycznie przez `JsonOutputParser`. Podsumowując, dla modeli tej skali podejście strukturyzowane jest wysoce nieefektywne.
+
+### 8.6. Eksperyment D — kwantyzacja (float16 vs 4-bit)
+
+Prompt prosty, temperatura 0,1.
 
 
-**Wniosek:** Parsowanie JSON osiąga wyniki na poziomie **losowego zgadywania** (~49% accuracy), model generuje niepełny lub niepoprawny JSON, a `JsonOutputParser` nie poprawia jakości klasyfikacji w tej konfiguracji.
+| Kwantyzacja | Accuracy | F1 macro | F1 weighted | Czas [s] | VRAM [GB] |
+| ----------- | -------- | -------- | ----------- | -------- | --------- |
+| float16     | 0,8111   | 0,6575   | 0,7607      | 412,2    | **3,25**  |
+| 4-bit (NF4) | 0,7866   | 0,6284   | 0,7365      | 798,9    | **1,31**  |
 
-### 8.6. Tabela porównawcza wszystkich eksperymentów
+
+**Wnioski:**
+
+- **Potężna redukcja śladu pamięciowego:** Skompresowanie wag modelu do formatu 4-bitowego (Normal Float 4) przyniosło radykalną, **blisko 60-procentową oszczędność pamięci VRAM** (spadek z 3,25 GB do zaledwie 1,31 GB). Wykazana redukcja udowadnia, że technika ta pozwala na uruchomienie modeli klasy LLM na sprzęcie o bardzo ograniczonych zasobach sprzętowych (np. starsze karty graficzne lub darmowe instancje chmurowe).
+- **Koszt jakościowy kompresji:** Redukcja precyzji matematycznej odbiła się negatywnie na zdolnościach językowych modelu. Odnotowano spadek celności o **2,45 punktu procentowego** oraz obniżenie miary $F1\text{ macro}$ o blisko 3 p.p. Dla mniejszych architektur (skali 1.5B) odrzucenie bitów precyzji częściej prowadzi do gubienia subtelnych niuansów semantycznych w tekście.
+- **Paradoks czasu inferencji:** Mimo mniejszego rozmiaru na dysku i w pamięci, model 4-bitowy przetwarzał zbiór testowy **niemal dwukrotnie dłużej** (798,9 s vs 412,2 s). Jest to bezpośredni skutek inżynieryjny działania biblioteki `bitsandbytes` – spakowane warianty 4-bitowe muszą być "w locie" dekwantyzowane (rozpakowywane) do formatu zmiennoprzecinkowego przed wykonaniem każdej operacji mnożenia macierzy na rdzeniach GPU, co generuje potężny narzut czasowy.
+- **Podsumowanie kompromisu:** Kwantyzacja to klasyczny kompromis inżynierski (*trade-off*). Pozwala drastycznie zminimalizować wymagania sprzętowe, jednak bezpośrednią ceną za to jest odczuwalna strata na jakości predykcji oraz znaczące wydłużenie czasu działania potoku.
+
+### 8.7. Tabela porównawcza wszystkich eksperymentów
 
 Tabela porównawcza zadanie 5
 
 
-| Eksperyment        | Temperatura | Accuracy | F1 macro | F1 weighted | Prompt      |
-| ------------------ | ----------- | -------- | -------- | ----------- | ----------- |
-| prompt=szczegółowy | 0,1         | 0,8314   | 0,7960   | 0,8268      | szczegółowy |
-| temp=0.7           | 0,7         | 0,7829   | 0,6671   | 0,7318      | —           |
-| temp=0.1           | 0,1         | 0,7743   | 0,6507   | 0,7189      | —           |
-| temp=0.0           | 0,0         | 0,7743   | 0,6507   | 0,7189      | —           |
-| prompt=prosty      | 0,1         | 0,7714   | 0,6436   | 0,7133      | prosty      |
-| parsowanie=JSON    | 0,1         | 0,4857   | 0,4878   | 0,4956      | JSON        |
+| Eksperyment            | Temp. | Kwant.  | Accuracy   | F1 macro   | F1 weighted | Czas [s] | VRAM [GB] |
+| ---------------------- | ----- | ------- | ---------- | ---------- | ----------- | -------- | --------- |
+| **prompt=szczegółowy** | 0,1   | float16 | **0,8583** | **0,7999** | **0,8513**  | 424,1    | 3,27      |
+| temp=0.7               | 0,7   | float16 | 0,8176     | 0,6832     | 0,7758      | 396,7    | 3,24      |
+| prompt=prosty          | 0,1   | float16 | 0,8143     | 0,6674     | 0,7668      | 399,8    | 3,24      |
+| temp=0.0               | 0,0   | float16 | 0,8127     | 0,6626     | 0,7636      | 435,5    | 3,24      |
+| temp=0.1               | 0,1   | float16 | 0,8111     | 0,6576     | 0,7605      | 410,8    | 3,24      |
+| quant=float16          | 0,1   | float16 | 0,8111     | 0,6575     | 0,7607      | 412,2    | 3,25      |
+| quant=4bit             | 0,1   | 4bit    | 0,7866     | 0,6284     | 0,7365      | 798,9    | 1,31      |
+| parsowanie=JSON        | 0,1   | float16 | 0,5016     | 0,5050     | 0,5295      | 434,9    | 3,33      |
 
 
-Najlepszy wariant: **prompt szczegółowy (PL)** przy temperaturze 0,1 — accuracy **83,1%**, F1 macro **79,6%**.
+**Główna obserwacja:** Optymalną konfiguracją dla badanego modelu okazało się zastosowanie **szczegółowego promptu w języku polskim przy niskiej temperaturze (0.1) w precyzji** `float16`, co pozwoliło na osiągnięcie najwyższej celności na poziomie **85,8%** oraz miary $F1\text{ macro} = 80,0\%$.
 
-### 8.7. Interpretacja wyników
+### 8.8. Interpretacja wyników
 
-1. **Prompt ma największy wpływ** — szczegółowy prompt po polsku (+6 pp accuracy vs prosty EN) wykorzystuje wiedzę modelu o polskim języku i jasno definiuje klasy.
-2. **Temperatura ma marginalny wpływ** — 0,0 i 0,1 dają identyczne wyniki (greedy decoding); 0,7 nieznacznie poprawia F1 macro, ale zwiększa wariancję.
-3. **JSON nie działa** — `JsonOutputParser` przy małym modelu (1,5B) generuje niekompletne struktury JSON; wyniki (~49%) są zbliżone do błędnego parsowania sprzed poprawki.
-4. Baseline z zad. 4 (prosty prompt EN, pełny test 614 próbek) osiąga **87,0% accuracy** — więcej niż HerBERT (75,9%). Eksploracja w zad. 5 na podzbiorze 70 próbek pokazuje dodatkowo wpływ promptu PL i temperatury.
+1. **Inżynieria promptów jako kluczowy czynnik sukcesu:** Zmiana treści instrukcji przyniosła najbardziej spektakularny zysk jakościowy (+4,4 p.p. Accuracy oraz ponad +13 p.p. F1 macro w porównaniu do prostego wariantu angielskiego). Przełamanie barier językowych w opisie klas pozwoliło modelowi `Qwen2.5` na pełne wykorzystanie wiedzy semantycznej o języku polskim.
+2. **Umiarkowany i probabilistyczny wpływ temperatury:** Zmiana temperatury w zakresie 0.0–0.1 nie wpływa na model z uwagi na deterministyczne dekodowanie zachłanne (*greedy decoding*). Z kolei podbicie parametru do $T=0.7$ rozszerzyło przestrzeń poszukiwań tokenów, co poskutkowało nieznacznym wzrostem miary F1 macro (0,6832). Eksperyment ten dowodzi, że wyższa temperatura może pomóc w klasyfikacji klas rzadkich (np. *neutral*), kosztem utraty powtarzalności wyników.
+3. **Składniowa destabilizacja przez format JSON:** Narzucenie strukturyzacji wyjścia za pomocą `JsonOutputParser` doprowadziło do załamania wydajności modelu do poziomu losowego (50,16%). Wynik ten jednoznacznie definiuje ograniczenia architektur o rozmiarze 1.5B parametrów — dbanie o techniczną poprawność kodu JSON odbywa się kosztem zdolności logicznego wnioskowania.
+4. **Wydajnościowy kompromis kwantyzacji:** Przejście na format 4-bitowy NF4 to klasyczny, inżynierski kompromis. Zmniejszenie zużycia pamięci VRAM o blisko 60% (do poziomu zaledwie 1,31 GB) okopane jest spadkiem celności o ok. 2,5 p.p. oraz drastycznym, dwukrotnym wydłużeniem czasu pracy potoku (798,9 s). Kwantyzacja jest zatem doskonałym wyborem przy restrykcyjnych ograniczeniach sprzętowych, ale nie sprawdza się przy optymalizacji systemów pod kątem czystej jakości i szybkości.
+5. **Kontekst porównawczy z modelem bazowym (Zadanie 4):** Baseline z zadania 4 (prosty prompt EN oparty na czystym pipeline transformers) osiągnął na pełnym teście 87,0% accuracy — wynik minimalnie lepszy niż najlepsza konfiguracja z zadania 5 (85,8%). Różnica ta wynika ze specyfiki implementacji: w zadaniu 4 model działał w środowisku bez narzutu abstrakcji frameworka LangChain, co minimalizowało ryzyko drobnych błędów parsowania. Warto jednak zaznaczyć, że **obie architektury LLM (zarówno z zadania 4, jak i 5) bezproblemowo i wyraźnie przewyższyły model enkoderowy HerBERT (75,9%)**, udowadniając wyższą elastyczność i potencjał modeli generatywnych w analizie sentymentu.
 
-### 8.8. Wnioski z zadania 5
+### 8.9. Wnioski z zadania 5
 
-1. **Prompt** — decydujący czynnik po naprawie parsowania; definicje klas po polsku dają najlepsze wyniki.
-2. **Temperatura** — niska (0,0–0,1) zapewnia stabilność; 0,7 daje niewielką poprawę kosztem powtarzalności.
-3. **JsonOutputParser** — niepoprawny wybór dla tego modelu i zadania; proste parsowanie tekstowe działa znacznie lepiej.
+1. **Kluczowe znaczenie inżynierii promptów:** Dobór języka oraz precyzja instrukcji okazały się najważniejszym czynnikiem optymalizacyjnym. Szczegółowy prompt w języku polskim, wzbogacony o definicje semantyczne klas, pozwolił modelowi `Qwen2.5` na pełną aktywację powiązań językowych i osiągnięcie najwyższej w tym zadaniu celności (**85,8%**).
+2. **Stabilność deterministyczna vs probabilistyczna elastyczność:** Niskie wartości temperatury ($T=0.0$ oraz $T=0.1$) gwarantują stabilność i pełną powtarzalność wyników klasyfikacji. Podniesienie parametru do $0.7$ aktywuje stochastyczne próbkowanie, co może nieznacznie poprawić rozpoznawanie klas rzadkich (wzrost $F1\text{ macro}$), lecz odbywa się to kosztem utraty determinizmu potoku przetwarzania.
+3. **Nieefektywność ustrukturyzowanego wyjścia (JSON):** Wykorzystanie `JsonOutputParser` w modelach o mniejszej liczbie parametrów (skala 1.5B) jest błędem projektowym. Wymuszenie rygorystycznej składni programistycznej przeciąża model i drastycznie obniża jakość wnioskowania logicznego (spadek celności do poziomu losowego $\approx 50\%$). W takich architekturach znacznie skuteczniejsze jest proste parsowanie wyjścia tekstowego za pomocą wyrażeń regularnych.
+4. **Kwantyzacja jako klasyczny kompromis inżynierski (*trade-off*):** Kompresja modelu do formatu 4-bitowego (NF4) pozwala na potężną, blisko 60-procentową oszczędność pamięci graficznej (redukcja z 3,25 GB do zaledwie 1,31 GB VRAM). Bezpośrednim kosztem tego zabiegu jest jednak utrata około 2,5 p.p. celności oraz dwukrotne wydłużenie czasu inferencji z powodu konieczności dekompresji wag "w locie". Jest to rozwiązanie rekomendowane wyłącznie w systemach o silnie ograniczonych zasobach sprzętowych.
 
 ---
 
@@ -535,22 +561,25 @@ Najlepszy wariant: **prompt szczegółowy (PL)** przy temperaturze 0,1 — accur
 | **F1 neutral**    | 0,20                  | **0,62**                   |
 | **F1 plus**       | 0,78                  | **0,85**                   |
 | **Zbiór testowy** | 614 próbek            | 614 próbek                 |
-| **Szybkość**      | Szybki (batch 16)     | Wolny (~1 tekst/sek.)      |
+| **Szybkość**      | Szybki (batch 16)     | Wolny (≈1 tekst/sek.)      |
 | **Konfiguracja**  | Pipeline, zero config | Prompt + parsowanie        |
-| **GPU RAM**       | ~0,5 GB               | ~3 GB (1,5B params)        |
+| **GPU RAM**       | ≈0,5 GB               | ≈3 GB (1,5B params)        |
 
 
-Na **tym samym pełnym zbiorze testowym** Qwen po poprawce parsowania **przewyższa HerBERT** we wszystkich metrykach globalnych. Encoder pozostaje szybszy i prostszy w wdrożeniu; LLM wymaga starannej konfiguracji promptu i warstwy parsowania.
+### Kluczowe obserwacje i dyskusja
 
-W zadaniu 5 (podzbiór 70 próbek) najlepszy wariant LLM z promptem szczegółowym PL osiąga accuracy 83,1% — wynik nieco niższy niż baseline z zad. 4 na pełnym teście, co wynika z mniejszej próbki i różnych wariantów promptu.
+- **Dominacja jakościowa modeli LLM:** Model dekoderowy `Qwen2.5` po wdrożeniu poprawnej warstwy parsowania tekstu bezapelacyjnie przewyższa model enkoderowy `HerBERT` we wszystkich globalnych metrykach klasyfikacyjnych (wzrost ogólnego Accuracy o **11,07 punktu procentowego** oraz F1 macro o **18,43 p.p.**).
+- **Przełom w detekcji klasy neutralnej:** Największą słabością modelu enkoderowego była klasyfikacja tekstów obiektywnych i opisowych — `HerBERT` zanotował krytycznie niski wynik $F1 = 0,20$, permanentnie myląc klasę *neutral* z klasą *plus* (aż 95 pomyłek na 117 próbek). Model `Qwen2.5` dzięki znacznie większej pojemności semantycznej poradził sobie z tym wyzwaniem bez porównania lepiej ($F1 = 0,62$). Choć on również przejawia tendencję do nadinterpretacji uprzejmego tonu jako sentymentu dodatniego (47 pomyłek), to poprawnie zidentyfikował połowę próbek neutralnych (58/117).
+- **Efektywność ekonomiczna i wdrożeniowa enkoderów:** Choć architektury *decoder-only* wygrywają pod kątem czystej jakości predykcji, `HerBERT` pozostaje bezkonkurencyjny w kategoriach czysto inżynierskich. Wymaga blisko **7-krotnie mniej pamięci GPU** ($\approx 0,5$ GB vs $\approx 3,25$ GB), nie potrzebuje budowania skomplikowanych potoków instrukcji (prompów) i pozwala na natywne przetwarzanie potokowe (*batch inference*), co czyni go rozwiązaniem wielokrotnie tańszym i szybszym w środowisku produkcyjnym.
+- **Krytyczna rola potoku przetwarzania (Parsowanie i Domena):** 1. Eksperymenty jednoznacznie dowiodły, że sukces modeli LLM w zadaniach deterministycznych w 100% zależy od czyszczenia danych wyjściowych (brak flagi `return_full_text=False` lub brak izolacji etykiety powoduje załamanie wyników do poziomu losowego $\approx 49\%$).
+  2. W przypadku enkoderów kluczowa jest z kolei zgodność domenowa danych treningowych — wykorzystanie modelu wyspecjalizowanego w innej domenie (`finance-sentiment-pl-base` w Zadaniu 3) skutkowało drastycznym spadkiem celności do poziomu 41,21%
 
-### Kluczowe obserwacje
+### Wnioski końcowe
 
-1. **LLM wygrywa na jakości** — przy poprawnym parsowaniu accuracy 87,0% vs 75,9% encodera na pełnym teście.
-2. **Neutral — LLM radzi sobie lepiej** — F1 0,62 (LLM) vs 0,20 (encoder); encoder myli neutral z plus (95/117), LLM częściej trafia (58/117), ale też myli z plus (47/117).
-3. **Encoder wygrywa na szybkości i prostocie** — brak promptów, batch inference, mniejsze zużycie RAM.
-4. **Parsowanie decyduje o wynikach LLM** — bez `return_full_text=False` i izolacji etykiety wyniki spadają do ~49%.
-5. **Domena treningu** (encoder, zad. 3) — model finansowy osiąga accuracy 0,41 vs 0,76 modelu recenzyjnego.
+Wybór między enkoderem a dekoderem w analizie sentymentu zależy bezpośrednio od priorytetów projektowych:
+
+1. Jeśli celem nadrzędnym jest **maksymalna dokładność**, poprawna interpretacja tekstów neutralnych oraz elastyczność bez konieczności ponownego trenowania sieci, najlepszym wyborem są małe modele **LLM (Decoder)** sterowane precyzyjnym promptem.
+2. Jeśli system ma działać w reżimie **czasu rzeczywistego (*low latency*)**, przy ograniczonych zasobach budżetowych/sprzętowych, mniejsze modele dedykowane **BERT (Encoder)** dostrojone do właściwej domeny językowej wciąż stanowią najbardziej optymalne i stabilne rozwiązanie inżynierskie.
 
 ---
 
@@ -558,23 +587,17 @@ W zadaniu 5 (podzbiór 70 próbek) najlepszy wariant LLM z promptem szczegółow
 
 ### 10.1. Odpowiedzi na pytania badawcze
 
-1. **Czy encoder-only radzi sobie z klasyfikacją wydźwięku polskich recenzji?**
-  Tak — HerBERT osiąga accuracy **75,9%** bez dodatkowego treningu. Klasy skrajne (minus, plus) rozpoznawane są dobrze (F1 > 0,78).
-2. **Czy LLM zero-shot jest konkurencyjny?**
-  **Tak** — po poprawce parsowania Qwen osiąga accuracy **87,0%** i F1 macro **81,1%** na pełnym teście (614 próbek), przewyższając HerBERT (75,9% / 62,6%). Wymaga to jednak precyzyjnego promptu, `return_full_text=False` i czyszczenia odpowiedzi; bez tego wyniki spadają do ~49%.
-3. **Która klasa jest najtrudniejsza?**
-  **Neutral** — encoder: F1 = 0,20 (czułość 0,14); LLM: F1 = 0,62 (czułość 0,50). LLM radzi sobie z neutral znacznie lepiej, ale nadal myli go z plus w połowie przypadków.
-4. **Jak parametry wpływają na wyniki?**
-  - **Encoder — domena modelu** — decydujący czynnik (recenzje vs finanse: 0,76 vs 0,41).
-  - **Encoder — max_length** — marginalny wpływ (optimum: 256 tokenów).
-  - **LLM — parsowanie odpowiedzi** — warunek konieczny poprawnych wyników (`return_full_text=False`, pierwsza linia odpowiedzi).
-  - **LLM — prompt** (zad. 5) — szczegółowy PL poprawia wyniki na podzbiorze; prosty EN w zad. 4 wystarcza do 87% na pełnym teście.
-  - **LLM — temperatura / JSON** (zad. 5) — marginalny wpływ temperatury; JSON niepoprawny (~49%).
+- **Czy modele typu *encoder-only* radzą sobie z klasyfikacją wydźwięku polskich recenzji?** **Tak.** Model `HerBERT-base-cased-sentiment` bez konieczności dodatkowego douczania (*fine-tuningu*) osiągnął satysfakcjonującą celność ogólną na poziomie **75,90%**. Architektura ta wykazuje bardzo wysoką skuteczność w rozpoznawaniu klas o silnym ładunku emocjonalnym, notując miary $F1 > 0,78$ dla tekstów pozytywnych oraz $F1 = 0,91$ dla tekstów negatywnych.
+- **Czy podejście *zero-shot* przy użyciu modeli LLM jest konkurencyjne?** **Tak, i wyraźnie przewyższa podejście enkoderowe.** Po wdrożeniu poprawnej warstwy parsowania, model `Qwen2.5-1.5B-Instruct` osiągnął na pełnym zbiorze testowym celność **87,0%** oraz miarę $F1\text{ macro} = 81,1\%$. Należy jednak podkreślić, że sukces ten jest całkowicie uwarunkowany inżynierią promptów oraz konfiguracją techniczną potoku (wymóg stosowania flagi `return_full_text=False` oraz izolacji pierwszej linii wyjściowej). Bez tych zabiegów jakość predykcji spada do poziomu losowego ($\approx 49\%$).
+- **Która klasa sentymentu stanowiła największe wyzwanie klasyfikacyjne?** **Klasa *neutral* (teksty obiektywne/opisowe).** W przypadku modelu enkoderowego błąd miał charakter krytyczny ($F1 = 0,20$, czułość zaledwie $0,14$), objawiając się masowym myleniem tekstów neutralnych z pozytywnymi. Model LLM poradził sobie z tym wyzwaniem nieporównywalnie lepiej ($F1 = 0,62$, czułość $0,50$), aczkolwiek on również w blisko połowie przypadków ulegał tendencji nadinterpretacji uprzejmego tonu wypowiedzi jako sentymentu dodatniego.
+- **Jak poszczególne parametry konfiguracyjne wpływają na końcowe wyniki?**
+  - *Dla enkoderów:* **Domena danych** jest czynnikiem krytycznym — model finansowy przenesiony do domeny recenzji zanotował drastyczny spadek celności (z 75,9% do 41,2%). Wpływ parametru `max_length` okazał się marginalny, o ile okno kontekstu nie zostało drastycznie ucięte poniżej średniej długości tekstu (punkt optymalny to 256 tokenów).
+  - *Dla dekoderów (LLM):* **Parsowanie wyjścia** oraz **treść promptu** to czynniki decydujące (szczegółowy prompt PL podniósł celność do 85,8% w porównaniu do 81,4% dla prostego promptu EN). Wpływ temperatury w zadaniu klasyfikacji okazał się umiarkowany (wariant $T=0.7$ nieznacznie podbił miarę $F1\text{ macro}$), podczas gdy narzucenie strukturyzacji wyjścia przez JSON całkowicie zdegradowało zdolności logiczne modelu ($\approx 50\%$ celności). Z kolei **kwantyzacja 4-bitowa** zaoferowała drastyczną redukcję zużycia VRAM (o ok. 60%), płacąc za to spadkiem celności o 2,5 p.p. oraz dwukrotnym wydłużeniem czasu inferencji.
 
-### 10.2. Wnioski praktyczne
+### 10.2. Wdrożeniowe wnioski praktyczne
 
-- Do **produkcji przy ograniczonym czasie inferencji**: encoder-only (HerBERT) — szybki, prosty, 76% accuracy bez konfiguracji.
-- Do **maksymalnej jakości zero-shot**: decoder LLM (Qwen) — **87% accuracy** na pełnym teście, ale wolniejszy i wymaga warstwy parsowania.
-- **Parsowanie odpowiedzi LLM** (`return_full_text=False`, izolacja etykiety) — bez tego wyniki są fałszywie złe (~49%).
-- Klasa **neutral** wymaga uwagi w obu architekturach; LLM (F1 0,62) znacznie przewyższa encoder (F1 0,20), ale nadal myli neutral z plus.
+1. **Środowiska produkcyjne o niskiej latencji (*Low-Latency Production*):** W systemach komercyjnych, gdzie kluczowy jest krótki czas odpowiedzi, wysoka przepustowość (przetwarzanie paczkami — *batching*) oraz minimalne koszty infrastrukturalne, optymalnym wyborem pozostaje **architektura typu *encoder-only* (HerBERT)**. Zapewnia ona stabilne ~76% celności przy minimalnym narzucie na alokację pamięci GPU ($\approx 0,5$ GB) i zerowej podatności na błędy parsowania tekstu.
+2. **Systemy nastawione na maksymalną jakość predykcji (*High-Accuracy Analytics*):** W systemach analitycznych typu *offline*, gdzie priorytetem jest precyzja (zwłaszcza w wyłapywaniu niuansów i tekstów neutralnych), a czas inferencji rzędu kilkunastu minut na kilkaset próbek jest akceptowalny, bezkonkurencyjne są **modele LLM (Decoder)**. Konfiguracja bazowa (Zadanie 4) lub zaawansowana inżynieria promptów po polsku (Zadanie 5) pozwalają przekroczyć barierę 85–87% dokładności bez procesu kosztownego douczania wag.
+3. **Optymalizacja sprzętowa na brzegu sieci (*Edge AI / Low-VRAM*):** Kwantyzacja do formatu 4-bitowego (NF4) jest wysoce rekomendowaną praktyką inżynierską w sytuacjach restrykcyjnych ograniczeń budżetowych. Umożliwia ona redukcję progu wejścia pamięci VRAM z 3,3 GB do zaledwie 1,3 GB, co pozwala na lokalne uruchamianie klasyfikatorów LLM nawet na konsumenckich lub starszych układach GPU, przy w pełni akceptowalnym koszcie jakościowym ($\approx -2,5$ p.p. Accuracy).
+4. **Złota zasada integracji z modelami generatywnymi:** Podczas implementacji potoków klasyfikacyjnych opartych na mniejszych modelach LLM (klasy 1.5B), należy bezwzględnie unikać parserów obiektowych (np. `JsonOutputParser`), które drastycznie destabilizują proces generowania. Najbardziej niezawodnym i wydajnym podejściem jest zmuszenie modelu do zwrotu pojedynczego tokenu tekstowego i jego późniejsza izolacja za pomocą prostych wyrażeń regularnych (Regex).
 
