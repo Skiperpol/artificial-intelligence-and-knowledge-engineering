@@ -18,7 +18,6 @@
 8. [Zadanie 5 — Eksploracja parametrów LLM (30 pkt)](#8-zadanie-5--eksploracja-parametrów-llm-30-pkt)
 9. [Porównanie encoder vs decoder](#9-porównanie-encoder-vs-decoder)
 10. [Podsumowanie i wnioski](#10-podsumowanie-i-wnioski)
-11. [Biblioteki i materiały źródłowe](#11-biblioteki-i-materiały-źródłowe)
 
 ---
 
