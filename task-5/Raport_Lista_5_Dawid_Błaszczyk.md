@@ -327,6 +327,8 @@ Tabela porównawcza — wszystkie eksperymenty
 
 ### 7.1. Model i konfiguracja
 
+Do przeprowadzenia klasyfikacji z użyciem architektury *decoder-only* wykorzystałem mniejszy model LLM, dostosowany do dostępnych zasobów obliczeniowych, zintegrowany z ekosystemem LangChain.
+
 
 | Parametr  | Wartość                         |
 | --------- | ------------------------------- |
@@ -334,15 +336,7 @@ Tabela porównawcza — wszystkie eksperymenty
 | Framework | LangChain + HuggingFacePipeline |
 
 
-Liczba próbek
-
-**Ładowanie modelu**
-
-Konfiguracja pipeline
-
-**Prompt bazowy** — ścisła instrukcja + spacja po `Class:`  wymuszająca jednowyrazową odpowiedź:
-
-Prompt i łańcuch LangChain
+W celu zmuszenia modelu generatywnego do działania w trybie klasyfikatora deterministycznego, zaprojektowano restrykcyjną instrukcję systemową. Na końcu struktury celowo dodano znak spacji po tokenie `Class:` , co ułatwia modelowi natychmiastowe wygenerowanie poprawnej etykiety:
 
 ```
 Classify the text sentiment into one of three classes: positive, negative, neutral.
@@ -352,9 +346,13 @@ Text: {text}
 Class: 
 ```
 
-**Parsowanie odpowiedzi** — przed mapowaniem brana jest tylko pierwsza linia odpowiedzi:
+#### Przepływ danych i parsowanie wyników
 
-Funkcja classify_with_llm
+Generowanie odpowiedzi przez model zostało zamknięte w strukturze łańcucha LangChain (`LCEL`). Ze względu na to, że modele generatywne (dekodery) mogą dopisywać zbędne znaki białej spacji lub komentarze, potok przetwarzania został wyposażony w mechanizm czyszczący:
+
+1. **Wywołanie LLM:** Model generuje tekst odpowiedzi na podstawie przekazanego tekstu recenzji.
+2. **Parsowanie tekstu:** Dedykowana funkcja `classify_with_llm` pobiera surowy tekst, odcina białe znaki, konwertuje litery na małe oraz – w ramach zabezpieczenia – ekstrahuje **wyłącznie pierwszą linię** wygenerowanej odpowiedzi.
+3. **Mapowanie etykiet:** Oczyszczony ciąg znaków jest mapowany na identyfikator numeryczny zgodny ze strukturą zbioru PolEmo2.0-IN. W przypadku błędu generowania lub braku odpowiedzi, aplikowana jest domyślna klasa bezpieczna (`neutral`).
 
 ### 7.2. Wyniki ewaluacji
 
@@ -389,9 +387,7 @@ plus     [      4        8     185  ]
 
 ### 7.3. Analiza surowych odpowiedzi LLM
 
-Podgląd surowych odpowiedzi
-
-Mapowanie na klasy zbioru:
+Proces parsowania tekstu generowanego przez LLM wykazał wysoką stabilność. Model w pełni respektował ograniczenia promptu (zwracał pojedyncze tokeny) oraz poprawnie radził sobie z różną wielkością liter (np. automatyczna konwersja tokenu `Negative` lub `negative` na wewnętrzny identyfikator klasy `minus`).
 
 
 | Prawda  | Odpowiedź LLM | Zmapowano | Poprawne? |
@@ -403,13 +399,15 @@ Mapowanie na klasy zbioru:
 | plus    | **positive**  | plus      | ✓         |
 
 
-Model radzi sobie z wielką/małą literą (`Negative` → minus). Główny błąd to **mylenie minus z plus** w długich, dwuznacznych recenzjach (pierwszy przykład — pozytywne zakończenie przy negatywnej ocenie lekarza).
+#### Charakterystyka błędów
 
-### 7.4. Wnioski
+Głównym źródłem pomyłek modelu generatywnego były sytuacje skrajne w długich i wielowątkowych recenzjach (np. w domenie medycznej). Przykładowo, w tekstach, gdzie pacjent szczegółowo opisywał negatywne aspekty zachowania personelu, ale na samym końcu umieszczał jedno zdanie o pozytywnym efekcie leczenia, model dawał się zwieść końcowemu wnioskowi i błędnie klasyfikował całą wypowiedź jako `positive`.
 
-1. Po naprawie parsowania LLM osiąga **accuracy 87,0%** na pełnym teście — **lepszy wynik niż HerBERT** (75,9%) przy tej samej liczbie próbek.
-2. Klasa **minus** jest rozpoznawana bardzo dobrze (F1 = 0,96); **plus** również (F1 = 0,85).
-3. **Neutral** pozostaje trudny (recall 0,50) — 47 z 117 przypadków mylonych z **plus** (teksty informacyjne bez wyraźnych emocji).
+### 7.4. Wnioski końcowe z sekcji decoder-only
+
+- **Przewaga architektury generatywnej:** Po wdrożeniu poprawnego potoku parsowania i czyszczenia tekstu, model `Qwen2.5-1.5B-Instruct` osiągnął bardzo wysoką dokładność ogólną na poziomie **87,0%**. Wynik ten w sposób wyraźny przewyższa najlepszy wariant modelu bazowanego na enkoderze (`HerBERT` osiągnął maksymalnie 76,2% dla okna 256). Pokazuje to duży potencjał modeli z rodziny LLM w zadaniach zero-shot z odpowiednio skonstruowanym promptem.
+- **Znakomita separacja skrajnych emocji:** Model wykazuje niemal perfekcyjną zdolność rozpoznawania tekstów silnie negatywnych (miara $F1 = 0,96$ dla klasy `minus`) oraz bardzo wysoką dla tekstów pozytywnych ($F1 = 0,85$ dla klasy `plus`). Przypadki bezpośredniego pomylenia klasy negatywnej z pozytywną (i odwrotnie) były incydentalne (łącznie 9 przypadków na cały zbiór).
+- **Trudność klasy neutralnej:** Podobnie jak w przypadku enkoderów, najtrudniejszym zadaniem okazało się wychwycenie tekstów neutralnych (niski Recall na poziomie 0,50). Macierz pomyłek jednoznacznie wskazuje, że model przejawia silną tendencję do nadinterpretacji tekstów obiektywnych/neutralnych i błędnego przypisywania ich do klasy pozytywnej (aż 47 przypadków fałszywie dodatnich). Prawdopodobnie wynika to z uprzejmego tonu wypowiedzi, który model generatywny utożsamia z sentymentem pozytywnym.
 
 ---
 
